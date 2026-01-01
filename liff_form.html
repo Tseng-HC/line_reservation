@@ -237,9 +237,8 @@
 
         // --- 按鈕動作：取消預約 ---
         function cancelReservation() {
-            if (confirm("確定要取消預約並離開嗎？")) {
-                liff.closeWindow(); // 直接關閉 LIFF
-            }
+            // 直接關閉 LIFF，不跳出詢問視窗
+            liff.closeWindow(); 
         }
 
         // --- 按鈕動作：確認送出 (核心邏輯) ---
@@ -283,13 +282,11 @@
                     type: 'text',
                     text: msg
                 }]).then(() => {
-                    // 延遲一點點確保訊息發送請求完成
-                    setTimeout(() => {
-                        alert("預約成功！視窗將關閉。");
-                        liff.closeWindow();
-                    }, 100);
+                    // 訊息發送後直接關閉視窗，不跳出 Alert，訊息會留在聊天室
+                    liff.closeWindow();
                 }).catch((err) => {
-                    alert("資料已送出！(但無法發送 LINE 訊息，請手動關閉)");
+                    // 若發送失敗，為了不卡住畫面，還是關閉視窗
+                    console.error('訊息發送失敗', err);
                     liff.closeWindow();
                 });
             } else {
