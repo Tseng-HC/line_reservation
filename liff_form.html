@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>預約資料填寫</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- 引入 LINE LIFF SDK -->
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        .fade-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        /* 讀取中遮罩 */
+        #loadingOverlay { backdrop-filter: blur(2px); }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen font-sans">
+
+    <!-- 填寫表單區域 -->
+    <div class="max-w-md mx-auto bg-white min-h-screen flex flex-col shadow-lg">
+        
+        <!-- 標題 -->
+        <div class="bg-[#06C755] text-white p-4 flex items-center justify-center relative shadow-md">
+            <h1 class="text-lg font-bold">線上預約服務</h1>
+        </div>
+
+        <!-- 歡迎詞與使用者資訊 -->
+        <div class="p-6 bg-green-50 border-b border-green-100">
+            <div class="flex items-center gap-3 mb-2">
+                <img id="userAvatar" src="https://via.placeholder.com/40" class="w-10 h-10 rounded-full border-2 border-white shadow-sm hidden">
+                <div>
+                    <p class="text-sm text-gray-600">哈囉，<span id="lineName" class="font-bold text-gray-800">載入中...</span></p>
+                    <p class="text-xs text-gray-500">請填寫下方預約資訊</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 輸入欄位 -->
+        <div class="p-6 flex-1">
+            <div class="space-y-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fa-solid fa-user text-green-600 mr-2"></i>姓名
+                    </label>
+                    <input type="text" id="nameInput" placeholder="請輸入您的姓名" 
+                        class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#06C755] focus:ring-2 focus:ring-green-100 outline-none transition-all">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fa-solid fa-phone text-green-600 mr-2"></i>聯絡電話
+                    </label>
+                    <input type="tel" id="phoneInput" placeholder="0912345678" 
+                        class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#06C755] focus:ring-2 focus:ring-green-100 outline-none transition-all">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fa-solid fa-clock text-green-600 mr-2"></i>三個希望預約時間、時段
+                    </label>
+                    <input type="text" id="timeInput"
+                        class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#06C755] focus:ring-2 focus:ring-green-100 outline-none transition-all">
+                </div>
+            </div>
+
+            <!-- 按鈕 -->
+            <button onclick="submitData()" class="mt-8 w-full bg-[#06C755] hover:bg-[#05b34c] text-white font-bold py-3.5 rounded-xl shadow-lg transform active:scale-95 transition-all flex items-center justify-center gap-2">
+                <span>確認預約</span>
+                <i class="fa-solid fa-paper-plane"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Loading 遮罩 -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-black/30 hidden z-50 flex items-center justify-center">
+        <div class="bg-white p-4 rounded-lg shadow-lg flex items-center gap-3">
+            <i class="fa-solid fa-circle-notch fa-spin text-[#06C755] text-xl"></i>
+            <span class="text-gray-700 font-medium">資料處理中...</span>
+        </div>
+    </div>
+
+    <script>
+        // 設定區：請填入您的資訊
+        // 1. Google Apps Script 網址 (部署為網頁應用程式後的 URL)
+        const GAS_URL = 'https://script.google.com/macros/s/AKfycbzCN6la6TVFK4xnhWaGlrGjsNrMvUSc2F7Orcm9su-RAOaaIYE_Ssj14R7DvgxPPTlUkg/exec'; 
+        
+        // 2. LIFF ID (從 LINE Developers Console 取得)
+        // 格式通常是：1234567890-AbCdEfGh
+        const MY_LIFF_ID = '您的_LIFF_ID_貼在這裡';
+
+        let userProfile = {
+            userId: '',
+            displayName: '貴賓'
+        };
+
+        // 初始化 LIFF
+        window.onload = function() {
+            initializeLiff(MY_LIFF_ID);
+        };
+
+        function initializeLiff(liffId) {
+            liff.init({
+                liffId: liffId
+            }).then(() => {
+                if (!liff.isLoggedIn()) {
+                    liff.login();
+                } else {
+                    // 取得使用者資料
+                    liff.getProfile().then(profile => {
+                        userProfile = profile;
+                        document.getElementById('lineName').textContent = profile.displayName;
+                        
+                        // 顯示頭像 (如果有)
+                        if(profile.pictureUrl) {
+                            const avatar = document.getElementById('userAvatar');
+                            avatar.src = profile.pictureUrl;
+                            avatar.classList.remove('hidden');
+                        }
+                    }).catch(err => console.error(err));
+                }
+            }).catch((err) => {
+                console.error('LIFF Initialization failed', err);
+                alert('LIFF 初始化失敗，請確認 LIFF ID 設定正確');
+            });
+        }
+
+        function submitData() {
+            const name = document.getElementById('nameInput').value;
+            const phone = document.getElementById('phoneInput').value;
+            const time = document.getElementById('timeInput').value;
+
+            if (!name || !phone || !time) {
+                alert('請完整填寫所有欄位');
+                return;
+            }
+
+            // 顯示 Loading
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+
+            // 1. 準備要傳給 GAS 的資料
+            const payload = {
+                uid: userProfile.userId,
+                displayName: userProfile.displayName,
+                name: name,
+                phone: phone,
+                time: time
+            };
+
+            // 2. 使用 sendBeacon 或 fetch (no-cors) 傳送資料到 Google Sheet
+            // 由於 GAS Web App 跨域問題，使用 no-cors 模式發送 (不會收到回傳值，但會寫入)
+            fetch(GAS_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            }).then(() => {
+                // 3. 成功後，傳送 LINE 訊息並關閉視窗
+                sendLineMessageAndClose(name, phone, time);
+            }).catch(err => {
+                console.error(err);
+                alert('資料傳送失敗，請稍後再試');
+                document.getElementById('loadingOverlay').classList.add('hidden');
+            });
+        }
+
+        function sendLineMessageAndClose(name, phone, time) {
+            // 組合訊息內容
+            const msg = `您已留下預約\n姓名：${name}\n電話：${phone}\n預期時間：${time.replace('T', ' ')}\n\n待人工處理後會與您聯繫`;
+
+            if (liff.isInClient()) {
+                liff.sendMessages([{
+                    type: 'text',
+                    text: msg
+                }]).then(() => {
+                    liff.closeWindow(); // 關閉視窗
+                }).catch((err) => {
+                    console.error('訊息發送失敗', err);
+                    // 即使訊息發送失敗，也關閉視窗
+                    liff.closeWindow();
+                });
+            } else {
+                // 如果是在外部瀏覽器開啟 (非 LINE 內)
+                alert('預約成功！\n' + msg);
+                document.getElementById('loadingOverlay').classList.add('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
