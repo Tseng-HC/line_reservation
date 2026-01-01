@@ -174,20 +174,20 @@
                 time: time
             };
 
-            // 傳送資料到 Google Sheet
+            // 修正與優化傳送邏輯
             fetch(GAS_URL, {
                 method: 'POST',
-                mode: 'no-cors',
+                mode: 'no-cors', // 重要：告訴瀏覽器這是跨域請求，不要等待回應內容
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'text/plain;charset=utf-8' // 關鍵修改：改成 text/plain 避免 OPTIONS 預檢請求
                 },
                 body: JSON.stringify(payload)
             }).then(() => {
-                // 成功後處理
+                // 成功後處理 (因為 mode: no-cors，這裡一定會被執行，除非網路斷線)
                 sendLineMessageAndClose(name, phone, time);
             }).catch(err => {
                 console.error(err);
-                alert('資料傳送失敗，但可能已寫入，請聯繫管理員');
+                alert('資料傳送失敗，請檢查網路連線');
                 document.getElementById('loadingOverlay').classList.add('hidden');
             });
         }
@@ -201,12 +201,14 @@
                     type: 'text',
                     text: msg
                 }]).then(() => {
-                    // 【關鍵修改】加入 Alert 讓使用者確認，確保流程走完
-                    alert("預約成功！訊息已發送，視窗將關閉。");
-                    liff.closeWindow(); 
+                    // 加入一個微小的延遲，讓系統有時間處理訊息佇列
+                    setTimeout(() => {
+                        alert("預約成功！視窗將關閉。");
+                        liff.closeWindow(); 
+                    }, 100);
                 }).catch((err) => {
                     console.error('訊息發送失敗', err);
-                    alert("預約資料已送出，但無法自動發送 LINE 訊息。\n(錯誤代碼: " + err + ")");
+                    alert("資料已送出！(訊息傳送失敗，請手動關閉視窗)");
                     liff.closeWindow();
                 });
             } else {
