@@ -1,4 +1,4 @@
-<!-- ver0.03 測試簡化版 -->
+<!-- ver0.08 PC模擬測試版 -->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -14,14 +14,14 @@
 </head>
 <body class="bg-gray-100 p-6 relative">
 
-    <!-- 版本號顯示 (右上角) -->
-    <div class="absolute top-2 right-2 text-xs text-gray-400 font-mono bg-gray-200 px-2 py-1 rounded">ver0.03 Test</div>
+    <!-- 版本號 -->
+    <div class="absolute top-2 right-2 text-xs text-gray-400 font-mono bg-gray-200 px-2 py-1 rounded">ver0.08 PC Sim</div>
 
     <!-- Loading -->
     <div id="loading">
         <div class="text-center">
             <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto mb-4"></div>
-            <p>測試連線中...</p>
+            <p>系統啟動中...</p>
         </div>
     </div>
 
@@ -29,24 +29,28 @@
     <div class="max-w-md mx-auto bg-white rounded-lg shadow p-6 space-y-6 mt-6">
         <h1 class="text-xl font-bold text-center text-blue-600">系統連線測試</h1>
         
+        <!-- 環境偵測顯示 -->
+        <div id="env-status" class="text-center text-xs font-bold px-2 py-1 rounded bg-gray-100 text-gray-500">
+            偵測環境中...
+        </div>
+
         <div class="p-4 bg-gray-50 rounded text-sm text-gray-600 space-y-2">
-            <p>1. 網頁開啟時，自動傳送資料給 GAS。</p>
-            <p>2. 網頁開啟時，自動在聊天室發送「訊息發送測試」。</p>
+            <p>1. 網頁開啟資料傳送：<span id="step1-status" class="text-gray-400">等待中...</span></p>
+            <p>2. 聊天室訊息發送：<span id="step2-status" class="text-gray-400">等待中...</span></p>
         </div>
 
         <hr>
 
         <div class="text-center">
-            <p class="mb-2 text-gray-700 font-medium">手動測試 API 回覆</p>
-            <button onclick="sendTestReply()" class="w-full py-3 bg-blue-600 text-white rounded hover:bg-blue-700 transition">
-                點擊發送 "API回覆測試"
+            <p class="mb-2 text-gray-700 font-medium">功能測試</p>
+            <button id="btn-reply" onclick="handleAction()" class="w-full py-3 bg-blue-600 text-white rounded hover:bg-blue-700 transition">
+                發送 "API回覆測試"
             </button>
-            <p class="text-xs text-gray-400 mt-2">點擊後，請關閉視窗查看機器人是否有回應</p>
+            <p id="hint-text" class="text-xs text-gray-400 mt-2">點擊後請留意聊天室</p>
         </div>
     </div>
 
     <script>
-        // 設定區 (請確認您的 LIFF ID 和 GAS URL)
         const LIFF_ID = '2008806287-jfDxgE50'; 
         const GAS_URL = 'https://script.google.com/macros/s/AKfycbwcNsPso4DX3T87JhPjgR32pw804dUF0CbwlpiAUBMr4l-HibOtCUYMHPs9UtaA4-khzw/exec';
 
@@ -58,33 +62,57 @@
             try {
                 await liff.init({ liffId: LIFF_ID });
                 
+                // PC 瀏覽器登入檢查
                 if (!liff.isLoggedIn()) {
                     liff.login();
-                    return;
+                    return; 
                 }
 
-                // 1. 測試：傳送資料到 GAS (靜默)
+                const envStatus = document.getElementById('env-status');
+                const step1 = document.getElementById('step1-status');
+                const step2 = document.getElementById('step2-status');
+                const btn = document.getElementById('btn-reply');
+                const hint = document.getElementById('hint-text');
+
+                // 1. 環境判斷
+                if (liff.isInClient()) {
+                    // --- 手機/LINE內 (真實模式) ---
+                    envStatus.textContent = "環境：LINE App (真實模式)";
+                    envStatus.className = "text-center text-xs font-bold px-2 py-1 rounded bg-green-100 text-green-700";
+                    btn.textContent = "發送 (真實API測試)";
+                } else {
+                    // --- 電腦/Chrome (模擬模式) ---
+                    envStatus.textContent = "環境：外部瀏覽器 (模擬模式)";
+                    envStatus.className = "text-center text-xs font-bold px-2 py-1 rounded bg-yellow-100 text-yellow-700";
+                    btn.textContent = "發送 (模擬測試)";
+                    hint.textContent = "模擬模式：僅寫入Sheet，機器人不會回話";
+                }
+
+                // 2. 自動傳送資料給 GAS
                 fetch(GAS_URL, {
                     method: 'POST',
                     mode: 'no-cors',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         type: 'test_connection',
-                        data1: 'GAS資料傳送測試欄位1',
-                        data2: 'GAS資料傳送測試欄位2',
-                        data3: 'GAS資料傳送測試欄位3'
+                        data1: liff.isInClient() ? '手機開啟' : '電腦開啟',
+                        data2: liff.getOS(),
+                        data3: '資料傳輸成功'
                     })
                 });
+                step1.textContent = "✅ 已送出";
+                step1.className = "text-green-600 font-bold";
 
-                // 2. 測試：自動發送訊息 (意圖宣告)
-                if (liff.getContext().type !== 'none') {
-                    await liff.sendMessages([{
-                        type: 'text',
-                        text: '訊息發送測試'
-                    }]);
+                // 3. 意圖宣告 (區分環境)
+                if (liff.isInClient()) {
+                    await liff.sendMessages([{ type: 'text', text: '訊息發送測試' }]);
+                    step2.textContent = "✅ 已發送 (看聊天室)";
+                    step2.className = "text-green-600 font-bold";
+                } else {
+                    step2.textContent = "⚠️ 已略過 (模擬中)";
+                    step2.className = "text-orange-400";
                 }
 
-                // 顯示畫面
                 document.body.style.visibility = 'visible';
                 document.getElementById('loading').style.display = 'none';
 
@@ -95,15 +123,34 @@
             }
         }
 
-        async function sendTestReply() {
-            try {
-                await liff.sendMessages([{
-                    type: 'text',
-                    text: 'API回覆測試'
-                }]);
-                liff.closeWindow(); 
-            } catch (error) {
-                alert('發送失敗: ' + error);
+        // 統一處理按鈕動作
+        async function handleAction() {
+            if (liff.isInClient()) {
+                // --- 手機：真的發送訊息 ---
+                try {
+                    await liff.sendMessages([{ type: 'text', text: 'API回覆測試' }]);
+                    liff.closeWindow();
+                } catch (error) {
+                    alert('發送失敗: ' + error);
+                }
+            } else {
+                // --- 電腦：模擬傳送資料給 GAS ---
+                try {
+                    await fetch(GAS_URL, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            type: 'test_connection',
+                            data1: '模擬按鈕點擊',
+                            data2: '電腦端測試',
+                            data3: '無法觸發機器人回覆'
+                        })
+                    });
+                    alert('【模擬成功】\n資料已傳送給 GAS，請檢查 Google Sheet。\n(注意：因為沒有 Token，機器人無法在聊天室回話)');
+                } catch (error) {
+                    alert('模擬失敗: ' + error);
+                }
             }
         }
     </script>
