@@ -1,4 +1,4 @@
-<!-- v1.2 Appointment App - Added Cancel Logic and Status Tracking -->
+<!-- v1.3 Appointment App - No Alerts, Custom Result Pages -->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -25,7 +25,7 @@
         <div class="bg-[#06C755] text-white p-4 flex items-center justify-center relative shadow-md">
             <h1 class="text-lg font-bold">線上預約服務</h1>
             <!-- 版本號顯示 -->
-            <div class="absolute top-0 right-0 p-2 text-[10px] text-white/70 font-mono">v1.2</div>
+            <div class="absolute top-0 right-0 p-2 text-[10px] text-white/70 font-mono">v1.3</div>
         </div>
 
         <!-- 歡迎詞與使用者資訊 -->
@@ -174,6 +174,16 @@
         </div>
     </div>
 
+    <!-- 4. 結果頁面 (取代 Alert) -->
+    <div id="resultPage" class="hidden fixed inset-0 bg-white z-50 flex flex-col items-center justify-center p-8 text-center fade-in">
+        <div id="resultIcon" class="text-6xl mb-6 transition-all"></div>
+        <h2 id="resultTitle" class="text-2xl font-bold mb-3 text-gray-800"></h2>
+        <p id="resultDesc" class="text-gray-600 mb-8 leading-relaxed"></p>
+        <button onclick="liff.closeWindow()" class="px-8 py-3 bg-gray-800 text-white rounded-xl shadow-lg hover:bg-gray-700 transition-colors">
+            關閉視窗
+        </button>
+    </div>
+
     <script>
         // 設定區
         // 部署新版本 GAS 後，請確認此網址是否需要更新
@@ -189,6 +199,7 @@
         const mainForm = document.getElementById('mainForm');
         const confirmModal = document.getElementById('confirmModal');
         const loadingOverlay = document.getElementById('loadingOverlay');
+        const resultPage = document.getElementById('resultPage');
 
         // 輸入框
         const nameInput = document.getElementById('nameInput');
@@ -202,6 +213,11 @@
         const displayPhone = document.getElementById('displayPhone');
         const displayTherapist = document.getElementById('displayTherapist');
         const displayTime = document.getElementById('displayTime');
+
+        // 結果頁元素
+        const resultIcon = document.getElementById('resultIcon');
+        const resultTitle = document.getElementById('resultTitle');
+        const resultDesc = document.getElementById('resultDesc');
 
         // 初始化 LIFF
         window.onload = function() {
@@ -242,7 +258,6 @@
             });
         }
 
-        // --- 功能：紀錄訪問 (瀏覽中) ---
         function logVisit(uid, lineName) {
             const payload = {
                 action: 'visit', 
@@ -257,32 +272,56 @@
             }).catch(console.error);
         }
 
-        // --- 功能：處理取消預約 (新增) ---
-        // 無論是一開始按取消，或是確認頁按取消，都走這裡
+        // --- 功能：顯示結果頁面 (統一處理) ---
+        function showResultPage(type) {
+            // 隱藏其他所有視窗
+            mainForm.classList.add('hidden');
+            confirmModal.classList.add('hidden');
+            loadingOverlay.classList.add('hidden');
+            
+            // 顯示結果頁
+            resultPage.classList.remove('hidden');
+
+            if (type === 'success') {
+                resultIcon.className = 'fa-solid fa-circle-check text-[#06C755] text-7xl mb-6';
+                resultTitle.textContent = '已送出預約訊息';
+                resultDesc.innerHTML = '待人工處理，會再與您聯繫<br>您現在可以關閉此視窗';
+            } else {
+                resultIcon.className = 'fa-solid fa-circle-xmark text-gray-400 text-7xl mb-6';
+                resultTitle.textContent = '已取消';
+                resultDesc.innerHTML = '已取消預約申請<br>您現在可以關閉此頁面';
+            }
+            
+            // 嘗試關閉視窗 (如果環境支援，使用者可能根本看不到這頁，直接關閉)
+            setTimeout(() => {
+                liff.closeWindow();
+            }, 500); // 延遲一點點讓畫面有機會渲染
+        }
+
+        // --- 功能：處理取消預約 ---
         function handleCancel() {
             if (!userProfile.userId) {
-                // 如果還沒抓到 UID 就按取消，直接關閉
                 liff.closeWindow();
                 return;
             }
 
-            // 為了讓使用者感覺反應快，我們不顯示 loading，背景送出請求後直接關閉
-            // 但為了確保請求有機會發出，稍微等待一下或使用 keepalive (但 LIFF 環境中 fetch 簡單處理較穩)
+            // 顯示 Loading
+            loadingOverlay.classList.remove('hidden');
+
             const payload = {
                 action: 'cancel',
                 uid: userProfile.userId,
                 displayName: userProfile.displayName
             };
 
-            // 發送取消請求
             fetch(GAS_URL, {
                 method: 'POST',
                 mode: 'no-cors',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify(payload)
             }).finally(() => {
-                // 無論成功失敗，都關閉視窗
-                liff.closeWindow();
+                // 不管成功失敗，都顯示取消結果頁
+                showResultPage('cancel');
             });
         }
 
@@ -306,12 +345,11 @@
             confirmModal.classList.remove('hidden');
         }
 
-        // --- 按鈕動作：修改 ---
         function editData() {
             confirmModal.classList.add('hidden');
         }
 
-        // --- 按鈕動作：確認送出 (核心邏輯) ---
+        // --- 按鈕動作：確認送出 ---
         function confirmSubmit() {
             confirmModal.classList.add('hidden');
             loadingOverlay.classList.remove('hidden');
@@ -345,11 +383,18 @@
 
             if (liff.isInClient()) {
                 liff.sendMessages([{ type: 'text', text: msg }])
-                    .then(() => liff.closeWindow())
-                    .catch(() => liff.closeWindow());
+                    .then(() => {
+                        // 訊息發送成功後，顯示結果頁並嘗試關閉
+                        showResultPage('success');
+                    })
+                    .catch((err) => {
+                        console.error('訊息發送失敗', err);
+                        // 失敗也顯示結果頁(至少資料有送給GAS)
+                        showResultPage('success');
+                    });
             } else {
-                alert('預約成功！(外部瀏覽器無法自動關閉)\n\n' + msg);
-                loadingOverlay.classList.add('hidden');
+                // 外部瀏覽器，直接顯示結果頁
+                showResultPage('success');
             }
         }
     </script>
