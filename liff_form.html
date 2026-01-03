@@ -65,7 +65,7 @@
                         class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#06C755] focus:ring-2 focus:ring-green-100 outline-none transition-all">
                 </div>
 
-                <!-- 新增：指定治療師 (下拉選單) -->
+                <!-- 指定治療師 (下拉選單) -->
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">
                         <i class="fa-solid fa-user-doctor text-green-600 mr-2"></i>指定治療師
@@ -100,7 +100,7 @@
         </div>
     </div>
 
-    <!-- 2. 確認彈窗 (Confirmation Modal) - 預設隱藏 -->
+    <!-- 2. 確認彈窗 (Confirmation Modal) -->
     <div id="confirmModal" class="fixed inset-0 bg-gray-900 bg-opacity-60 hidden z-40 flex items-center justify-center p-4 backdrop-blur-sm">
         <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm fade-in overflow-hidden relative">
             
@@ -122,7 +122,6 @@
                         <span class="text-xs text-gray-400">電話</span>
                         <span id="displayPhone" class="font-bold text-gray-800 text-lg"></span>
                     </div>
-                    <!-- 新增：顯示治療師 -->
                     <div class="flex flex-col border-t border-gray-200 pt-2">
                         <span class="text-xs text-gray-400">指定治療師</span>
                         <span id="displayTherapist" class="font-bold text-gray-800 text-lg text-green-600"></span>
@@ -181,14 +180,14 @@
         // 輸入框
         const nameInput = document.getElementById('nameInput');
         const phoneInput = document.getElementById('phoneInput');
-        const therapistInput = document.getElementById('therapistInput'); // 新增
+        const therapistInput = document.getElementById('therapistInput');
         const timeInput = document.getElementById('timeInput');
         const uidInput = document.getElementById('uidInput');
 
         // 顯示區
         const displayName = document.getElementById('displayName');
         const displayPhone = document.getElementById('displayPhone');
-        const displayTherapist = document.getElementById('displayTherapist'); // 新增
+        const displayTherapist = document.getElementById('displayTherapist');
         const displayTime = document.getElementById('displayTime');
 
         // 初始化 LIFF
@@ -200,7 +199,6 @@
             liff.init({
                 liffId: liffId
             }).then(() => {
-                // 判斷是否在 LINE App 內，若不是且未登入則導向登入
                 if (!liff.isInClient() && !liff.isLoggedIn()) {
                     liff.login();
                 } else {
@@ -219,6 +217,9 @@
                         uidInput.classList.remove('text-gray-500');
                         uidInput.classList.add('text-gray-800', 'font-bold');
 
+                        // *** 新增：一取得個資，立刻紀錄「已訪問」 ***
+                        logVisit(profile.userId, profile.displayName);
+
                     }).catch(err => {
                         console.error('Profile Error', err);
                         uidInput.value = "無法抓取 UID: " + err;
@@ -229,17 +230,36 @@
             });
         }
 
+        // --- 功能：紀錄訪問 (新增此函式) ---
+        function logVisit(uid, lineName) {
+            const payload = {
+                action: 'visit', // 告訴後端這是訪問紀錄
+                uid: uid,
+                displayName: lineName
+            };
+            
+            // 背景執行 fetch，不阻擋使用者操作，也不顯示 loading
+            fetch(GAS_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payload)
+            }).then(() => {
+                console.log('訪問紀錄已發送');
+            }).catch(err => {
+                console.error('訪問紀錄發送失敗', err);
+            });
+        }
+
         // --- 第一步：顯示確認視窗 ---
         function showConfirmation() {
             const uid = uidInput.value;
             
-            // 驗證 UID
             if (uid === '等待讀取...' || uid.startsWith('無法')) {
                 alert('尚未抓取到 LINE 使用者資料，請重新整理頁面');
                 return;
             }
 
-            // 驗證輸入欄位
             if (!nameInput.value || !phoneInput.value || !timeInput.value) {
                 alert('請完整填寫所有欄位');
                 return;
@@ -248,42 +268,37 @@
             // 填入確認視窗的內容
             displayName.textContent = nameInput.value;
             displayPhone.textContent = phoneInput.value;
-            displayTherapist.textContent = therapistInput.value; // 新增
+            displayTherapist.textContent = therapistInput.value;
             displayTime.textContent = timeInput.value;
 
-            // 顯示 Modal
             confirmModal.classList.remove('hidden');
         }
 
         // --- 按鈕動作：修改 ---
         function editData() {
-            // 隱藏 Modal，回到表單（資料保留）
             confirmModal.classList.add('hidden');
         }
 
         // --- 按鈕動作：取消預約 ---
         function cancelReservation() {
-            // 直接關閉 LIFF，不跳出詢問視窗
             liff.closeWindow(); 
         }
 
         // --- 按鈕動作：確認送出 (核心邏輯) ---
         function confirmSubmit() {
-            // 隱藏 Modal
             confirmModal.classList.add('hidden');
-            // 顯示 Loading
             loadingOverlay.classList.remove('hidden');
 
             const payload = {
+                action: 'submit', // 告訴後端這是正式送出，要更新資料
                 uid: userProfile.userId,
                 displayName: userProfile.displayName,
                 name: nameInput.value,
                 phone: phoneInput.value,
-                therapist: therapistInput.value, // 新增
+                therapist: therapistInput.value, 
                 time: timeInput.value
             };
 
-            // 使用 no-cors 與 text/plain 解決跨域問題
             fetch(GAS_URL, {
                 method: 'POST',
                 mode: 'no-cors',
@@ -292,7 +307,6 @@
                 },
                 body: JSON.stringify(payload)
             }).then(() => {
-                // 成功後執行發送訊息與關閉
                 sendLineMessageAndClose(payload.name, payload.phone, payload.therapist, payload.time);
             }).catch(err => {
                 console.error(err);
@@ -302,7 +316,6 @@
         }
 
         function sendLineMessageAndClose(name, phone, therapist, time) {
-            // 更新 LINE 訊息內容，加入治療師資訊
             const msg = `您已留下預約\n姓名：${name}\n電話：${phone}\n指定治療師：${therapist}\n預期時間：${time}\n\n待人工處理後會與您聯繫`;
 
             if (liff.isInClient()) {
@@ -310,10 +323,8 @@
                     type: 'text',
                     text: msg
                 }]).then(() => {
-                    // 訊息發送後直接關閉視窗，不跳出 Alert，訊息會留在聊天室
                     liff.closeWindow();
                 }).catch((err) => {
-                    // 若發送失敗，為了不卡住畫面，還是關閉視窗
                     console.error('訊息發送失敗', err);
                     liff.closeWindow();
                 });
