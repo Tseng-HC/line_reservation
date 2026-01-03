@@ -1,4 +1,4 @@
-<!-- ver0.15 智慧寫入與預覽狀態版 -->
+<!-- ver0.16 取消畫面優化版 -->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -9,6 +9,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { visibility: hidden; }
+        /* Loading 遮罩樣式 */
         #loading { visibility: visible; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; display: flex; justify-content: center; align-items: center; z-index: 999; }
         .hidden { display: none; }
     </style>
@@ -16,13 +17,13 @@
 <body class="bg-gray-50 p-6 relative">
 
     <!-- 版本號 -->
-    <div class="absolute top-2 right-2 text-xs text-gray-400 font-mono bg-gray-200 px-2 py-1 rounded">ver0.15</div>
+    <div class="absolute top-2 right-2 text-xs text-gray-400 font-mono bg-gray-200 px-2 py-1 rounded">ver0.16</div>
 
-    <!-- Loading -->
+    <!-- Loading / 狀態提示畫面 -->
     <div id="loading">
         <div class="text-center">
             <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-green-500 mx-auto mb-4"></div>
-            <p class="text-gray-500">載入預約系統...</p>
+            <p id="loading-text" class="text-gray-500">載入預約系統...</p>
         </div>
     </div>
 
@@ -199,7 +200,7 @@
             });
         }
 
-        // 2. 前往預覽頁面 (更新狀態為 "送出前預覽")
+        // 2. 前往預覽頁面
         function toReview() {
             const name = document.getElementById('name').value.trim();
             const phone = document.getElementById('phone').value.trim();
@@ -215,7 +216,7 @@
             document.getElementById('review-therapist').textContent = document.getElementById('therapist').value;
             document.getElementById('review-time').textContent = time;
 
-            // 【修改】切換到預覽時，通知後端更新狀態
+            // 更新後端狀態為 "送出前預覽"
             syncData('preview_form');
 
             document.getElementById('form-section').classList.add('hidden');
@@ -230,17 +231,20 @@
             document.getElementById('review-section').classList.add('hidden');
             document.getElementById('form-section').classList.remove('hidden');
             document.getElementById('page-hint').textContent = "請填寫下方資料，填寫進度將自動保存。";
-            // 返回時，只要欄位有變動就會觸發 onchange 自動改回 "填寫中"
         }
 
-        // 4. 取消表單 (無須確認，直接取消)
+        // 4. 取消表單 (優化：顯示取消畫面)
         async function cancelForm() {
-            // 【修改】移除 confirm 確認視窗
-
-            const btns = document.querySelectorAll('button');
-            btns.forEach(b => b.disabled = true);
+            // 不再跳 confirm，直接執行取消
+            
+            // 【UI優化】立即顯示全版遮罩與文字
+            const loadingDiv = document.getElementById('loading');
+            const loadingText = document.getElementById('loading-text');
+            loadingText.textContent = "正在取消預約...";
+            loadingDiv.style.display = 'flex'; // 強制顯示 flex 以置中
 
             try {
+                // 發送取消請求，設定 3 秒逾時
                 await Promise.race([
                     fetch(GAS_URL, {
                         method: 'POST',
@@ -258,6 +262,7 @@
                 console.error("Cancel timeout or error", e);
             }
 
+            // 完成後關閉視窗
             liff.closeWindow();
         }
 
