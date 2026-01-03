@@ -1,3 +1,4 @@
+<!-- v1.2 Appointment App - Added Cancel Logic and Status Tracking -->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -23,8 +24,8 @@
         <!-- 標題 -->
         <div class="bg-[#06C755] text-white p-4 flex items-center justify-center relative shadow-md">
             <h1 class="text-lg font-bold">線上預約服務</h1>
-            <!-- 新增：版本號顯示 (絕對定位於右上角) -->
-            <div class="absolute top-0 right-0 p-2 text-[10px] text-white/70 font-mono">v1.1</div>
+            <!-- 版本號顯示 -->
+            <div class="absolute top-0 right-0 p-2 text-[10px] text-white/70 font-mono">v1.2</div>
         </div>
 
         <!-- 歡迎詞與使用者資訊 -->
@@ -94,11 +95,20 @@
                 </div>
             </div>
 
-            <!-- 第一步按鈕：送出預覽 -->
-            <button onclick="showConfirmation()" class="mt-8 w-full bg-[#06C755] hover:bg-[#05b34c] text-white font-bold py-3.5 rounded-xl shadow-lg transform active:scale-95 transition-all flex items-center justify-center gap-2">
-                <span>送出預覽</span>
-                <i class="fa-solid fa-arrow-right"></i>
-            </button>
+            <!-- 第一步按鈕群組 -->
+            <div class="mt-8 flex flex-col gap-3">
+                <!-- 送出預覽 -->
+                <button onclick="showConfirmation()" class="w-full bg-[#06C755] hover:bg-[#05b34c] text-white font-bold py-3.5 rounded-xl shadow-lg transform active:scale-95 transition-all flex items-center justify-center gap-2">
+                    <span>送出預覽</span>
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+                
+                <!-- 新增：首頁的取消按鈕 -->
+                <button onclick="handleCancel()" class="w-full bg-gray-100 hover:bg-red-50 text-red-500 font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 border border-transparent hover:border-red-200">
+                    <i class="fa-solid fa-xmark"></i>
+                    <span>取消預約</span>
+                </button>
+            </div>
         </div>
     </div>
 
@@ -147,8 +157,8 @@
                     <button onclick="editData()" class="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2.5 rounded-xl shadow transition-colors flex items-center justify-center gap-2">
                         <i class="fa-solid fa-pen"></i> 修改
                     </button>
-                    <!-- 取消預約 -->
-                    <button onclick="cancelReservation()" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-2.5 rounded-xl shadow transition-colors flex items-center justify-center gap-2">
+                    <!-- 取消預約 (連結到 handleCancel) -->
+                    <button onclick="handleCancel()" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-2.5 rounded-xl shadow transition-colors flex items-center justify-center gap-2">
                         <i class="fa-solid fa-trash"></i> 取消預約
                     </button>
                 </div>
@@ -166,7 +176,7 @@
 
     <script>
         // 設定區
-        // 注意：請確認此網址是否為最新部署的 GAS 網址
+        // 部署新版本 GAS 後，請確認此網址是否需要更新
         const GAS_URL = 'https://script.google.com/macros/s/AKfycbwcv9O12WtL5LSBcfJLw-7jZrJoXZkiWeH5uR-3BBhKQNK_-YQokJKGUERRO06pJale/exec'; 
         const MY_LIFF_ID = '2008806287-HtVIW9IQ';
 
@@ -217,10 +227,9 @@
 
                         // 填入 UID
                         uidInput.value = profile.userId;
-                        uidInput.classList.remove('text-gray-500');
-                        uidInput.classList.add('text-gray-800', 'font-bold');
+                        uidInput.classList.remove('text-gray-800', 'font-bold');
 
-                        // *** 新增：一取得個資，立刻紀錄「已訪問」 ***
+                        // 一取得個資，立刻紀錄「已訪問」(瀏覽中)
                         logVisit(profile.userId, profile.displayName);
 
                     }).catch(err => {
@@ -233,42 +242,62 @@
             });
         }
 
-        // --- 功能：紀錄訪問 (新增此函式) ---
+        // --- 功能：紀錄訪問 (瀏覽中) ---
         function logVisit(uid, lineName) {
             const payload = {
-                action: 'visit', // 告訴後端這是訪問紀錄
+                action: 'visit', 
                 uid: uid,
                 displayName: lineName
             };
-            
-            // 背景執行 fetch，不阻擋使用者操作，也不顯示 loading
             fetch(GAS_URL, {
                 method: 'POST',
                 mode: 'no-cors',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify(payload)
-            }).then(() => {
-                console.log('訪問紀錄已發送');
-            }).catch(err => {
-                console.error('訪問紀錄發送失敗', err);
+            }).catch(console.error);
+        }
+
+        // --- 功能：處理取消預約 (新增) ---
+        // 無論是一開始按取消，或是確認頁按取消，都走這裡
+        function handleCancel() {
+            if (!userProfile.userId) {
+                // 如果還沒抓到 UID 就按取消，直接關閉
+                liff.closeWindow();
+                return;
+            }
+
+            // 為了讓使用者感覺反應快，我們不顯示 loading，背景送出請求後直接關閉
+            // 但為了確保請求有機會發出，稍微等待一下或使用 keepalive (但 LIFF 環境中 fetch 簡單處理較穩)
+            const payload = {
+                action: 'cancel',
+                uid: userProfile.userId,
+                displayName: userProfile.displayName
+            };
+
+            // 發送取消請求
+            fetch(GAS_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payload)
+            }).finally(() => {
+                // 無論成功失敗，都關閉視窗
+                liff.closeWindow();
             });
         }
 
         // --- 第一步：顯示確認視窗 ---
         function showConfirmation() {
             const uid = uidInput.value;
-            
             if (uid === '等待讀取...' || uid.startsWith('無法')) {
                 alert('尚未抓取到 LINE 使用者資料，請重新整理頁面');
                 return;
             }
-
             if (!nameInput.value || !phoneInput.value || !timeInput.value) {
                 alert('請完整填寫所有欄位');
                 return;
             }
 
-            // 填入確認視窗的內容
             displayName.textContent = nameInput.value;
             displayPhone.textContent = phoneInput.value;
             displayTherapist.textContent = therapistInput.value;
@@ -282,18 +311,13 @@
             confirmModal.classList.add('hidden');
         }
 
-        // --- 按鈕動作：取消預約 ---
-        function cancelReservation() {
-            liff.closeWindow(); 
-        }
-
         // --- 按鈕動作：確認送出 (核心邏輯) ---
         function confirmSubmit() {
             confirmModal.classList.add('hidden');
             loadingOverlay.classList.remove('hidden');
 
             const payload = {
-                action: 'submit', // 告訴後端這是正式送出，要更新資料
+                action: 'submit', 
                 uid: userProfile.userId,
                 displayName: userProfile.displayName,
                 name: nameInput.value,
@@ -305,9 +329,7 @@
             fetch(GAS_URL, {
                 method: 'POST',
                 mode: 'no-cors',
-                headers: {
-                    'Content-Type': 'text/plain;charset=utf-8'
-                },
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify(payload)
             }).then(() => {
                 sendLineMessageAndClose(payload.name, payload.phone, payload.therapist, payload.time);
@@ -322,15 +344,9 @@
             const msg = `您已留下預約\n姓名：${name}\n電話：${phone}\n指定治療師：${therapist}\n預期時間：${time}\n\n待人工處理後會與您聯繫`;
 
             if (liff.isInClient()) {
-                liff.sendMessages([{
-                    type: 'text',
-                    text: msg
-                }]).then(() => {
-                    liff.closeWindow();
-                }).catch((err) => {
-                    console.error('訊息發送失敗', err);
-                    liff.closeWindow();
-                });
+                liff.sendMessages([{ type: 'text', text: msg }])
+                    .then(() => liff.closeWindow())
+                    .catch(() => liff.closeWindow());
             } else {
                 alert('預約成功！(外部瀏覽器無法自動關閉)\n\n' + msg);
                 loadingOverlay.classList.add('hidden');
