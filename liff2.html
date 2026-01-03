@@ -1,4 +1,4 @@
-<!-- ver0.24 按鈕比例優化版 -->
+<!-- ver0.26 Environment Alert -->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -8,8 +8,9 @@
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { visibility: hidden; }
-        #loading { visibility: visible; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; display: flex; justify-content: center; align-items: center; z-index: 999; }
+        /* 移除 body visibility: hidden，改用 Loading 遮罩控制 */
+        /* body { visibility: hidden; } */
+        #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; display: flex; justify-content: center; align-items: center; z-index: 999; }
         .hidden { display: none; }
         /* 針對小螢幕優化輸入框高度 */
         input, select, textarea { font-size: 16px; } /* 防止 iOS 縮放 */
@@ -18,7 +19,12 @@
 <body class="bg-gray-50 p-3 relative min-h-screen">
 
     <!-- 版本號 (移至最右下角，僅顯示數字) -->
-    <div class="fixed bottom-1 right-1 text-[10px] text-gray-300 font-mono z-0 pointer-events-none">ver0.24</div>
+    <div class="fixed bottom-1 right-1 text-[10px] text-gray-300 font-mono z-0 pointer-events-none">ver0.26</div>
+
+    <!-- 訊息提示區 (取代 alert，提升體驗且相容預覽) -->
+    <div id="msg-toast" class="fixed top-4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded shadow-lg text-sm z-50 hidden transition-opacity duration-300">
+        提示訊息
+    </div>
 
     <!-- Loading -->
     <div id="loading">
@@ -28,11 +34,9 @@
         </div>
     </div>
 
-    <!-- 主要容器 (減少 margin 與 padding 以適應 Tall View) -->
+    <!-- 主要容器 (Tall View 優化版) -->
     <div class="max-w-md mx-auto bg-white rounded-lg shadow-sm p-4 space-y-3 mt-1">
         <h1 class="text-xl font-bold text-center text-green-700 mb-2">預約治療師</h1>
-        
-        <!-- 移除原本的歡迎區塊，讓表單向上移動 -->
         
         <!-- ================= 表單填寫區 ================= -->
         <div id="form-section">
@@ -66,8 +70,7 @@
                     <textarea id="time_slots" required rows="3" onchange="syncData()" class="mt-1 block w-full rounded border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 border p-2 bg-gray-50" placeholder="例如：1/5 下午 2:00&#10;1/6 上午 10:00"></textarea>
                 </div>
 
-                <!-- 按鈕區 (填寫頁) -->
-                <!-- 優化：下一步按鈕放大 (3/5)，取消縮小 (2/5)，強調主要動作 -->
+                <!-- 按鈕區 -->
                 <div class="flex space-x-2 pt-2">
                     <button type="button" onclick="toReview()" class="w-3/5 py-3 bg-green-600 text-white rounded hover:bg-green-700 transition font-bold shadow">
                         下一步
@@ -103,13 +106,12 @@
                 </div>
             </div>
 
-            <!-- 按鈕區 (預覽頁) -->
+            <!-- 按鈕區 -->
             <div class="flex flex-col space-y-2 pt-1">
                 <button type="button" onclick="confirmSubmit()" class="w-full py-3 bg-green-600 text-white rounded hover:bg-green-700 transition font-bold shadow-lg text-lg">
                     確認送出
                 </button>
                 
-                <!-- 需求：左邊修改，右邊取消 -->
                 <div class="flex space-x-2">
                     <button type="button" onclick="backToEdit()" class="w-1/2 py-3 bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200 transition font-bold">
                         修改
@@ -135,20 +137,49 @@
             initializeLiff();
         };
 
+        // Toast 提示功能
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('msg-toast');
+            toast.textContent = message;
+            toast.className = `fixed top-4 left-1/2 transform -translate-x-1/2 px-4 py-2 rounded shadow-lg text-sm z-50 transition-opacity duration-300 ${isError ? 'bg-red-600 text-white' : 'bg-gray-800 text-white'}`;
+            toast.style.display = 'block';
+            setTimeout(() => {
+                toast.style.display = 'none';
+            }, 3000);
+        }
+
         async function initializeLiff() {
             try {
-                await liff.init({ liffId: LIFF_ID });
-                
-                if (!liff.isLoggedIn()) {
-                    liff.login();
-                    return; 
+                if (typeof liff === 'undefined') {
+                    throw new Error('LIFF SDK 載入失敗');
                 }
 
-                const idToken = liff.getDecodedIDToken();
-                g_uid = idToken.sub;
-                g_displayName = idToken.name || "用戶";
+                await liff.init({ liffId: LIFF_ID });
+
+                // 【新增】環境偵測警示
+                if (!liff.isInClient()) {
+                    alert("提醒：您目前使用電腦或外部瀏覽器，預約功能將受限。\n\n建議使用 LINE App 開啟預約，避免失敗。");
+                }
                 
-                // 開啟紀錄 (背景執行)
+                // 登入檢查與環境判斷
+                if (!liff.isLoggedIn()) {
+                    if (!liff.isInClient()) {
+                        // 預覽模式 / PC 瀏覽器：使用假資料
+                        console.log("預覽模式：使用模擬資料");
+                        g_uid = "preview_user";
+                        g_displayName = "預覽用戶";
+                    } else {
+                        // LINE App 內：強制登入
+                        liff.login();
+                        return;
+                    }
+                } else {
+                    const idToken = liff.getDecodedIDToken();
+                    g_uid = idToken.sub;
+                    g_displayName = idToken.name || "用戶";
+                }
+                
+                // 1. 開啟紀錄 (背景執行)
                 fetch(GAS_URL, {
                     method: 'POST',
                     mode: 'no-cors',
@@ -160,21 +191,20 @@
                     })
                 });
 
-                // 意圖宣告
+                // 2. 意圖宣告 (僅在 LINE Client 內發送)
                 if (liff.isInClient()) {
                     await liff.sendMessages([{ type: 'text', text: '預約治療師' }]);
                 }
 
-                // 啟動心跳 (20分鐘一次)
+                // 3. 啟動心跳
                 startHeartbeat();
 
-                document.body.style.visibility = 'visible';
                 document.getElementById('loading').style.display = 'none';
 
             } catch (error) {
-                alert('初始化錯誤: ' + error);
-                document.body.style.visibility = 'visible';
+                console.error('Init Error:', error);
                 document.getElementById('loading').style.display = 'none';
+                showToast('系統初始化異常 (預覽模式)', true);
             }
         }
 
@@ -190,7 +220,7 @@
                         uid: g_uid
                     })
                 });
-            }, 1200000); 
+            }, 1200000); // 20分鐘
         }
 
         function stopHeartbeat() {
@@ -236,7 +266,7 @@
             const time = document.getElementById('time_slots').value.trim();
             
             if (!name || !phone || !time) {
-                alert("請完整填寫姓名、電話與期望時間");
+                showToast("請完整填寫姓名、電話與期望時間", true);
                 return;
             }
 
@@ -277,10 +307,9 @@
                         name: g_displayName
                     })
                 });
-                
                 await new Promise(resolve => setTimeout(resolve, 500));
             } catch (e) {
-                console.error("Cancel trigger error", e);
+                console.error("Cancel error", e);
             }
 
             liff.closeWindow();
@@ -297,7 +326,6 @@
                 const formData = await syncData('submit_form', true);
 
                 if (liff.isInClient()) {
-                    // 更新訊息格式，加入電話，並修改標題
                     const msg = `預約資料如下\n姓名: ${formData.form_name}\n電話: ${formData.form_phone}\n指定治療師: ${formData.form_therapist}\n期望時間: ${formData.form_time}`;
                     await liff.sendMessages([{ type: 'text', text: msg }]);
                 }
@@ -305,7 +333,7 @@
                 liff.closeWindow();
 
             } catch (error) {
-                alert('傳送失敗: ' + error + '\n請重新嘗試送出。');
+                showToast('傳送失敗，請重新嘗試', true);
                 btn.disabled = false;
                 btn.innerText = "確認送出";
                 startHeartbeat(); 
