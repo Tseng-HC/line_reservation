@@ -1,4 +1,4 @@
-<!-- ver0.12 即時同步版 -->
+<!-- ver0.13 預覽與取消功能版 -->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -10,12 +10,13 @@
     <style>
         body { visibility: hidden; }
         #loading { visibility: visible; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; display: flex; justify-content: center; align-items: center; z-index: 999; }
+        .hidden { display: none; }
     </style>
 </head>
 <body class="bg-gray-50 p-6 relative">
 
     <!-- 版本號 -->
-    <div class="absolute top-2 right-2 text-xs text-gray-400 font-mono bg-gray-200 px-2 py-1 rounded">ver0.12</div>
+    <div class="absolute top-2 right-2 text-xs text-gray-400 font-mono bg-gray-200 px-2 py-1 rounded">ver0.13</div>
 
     <!-- Loading -->
     <div id="loading">
@@ -25,53 +26,100 @@
         </div>
     </div>
 
-    <!-- 預約面板 -->
+    <!-- 主要容器 -->
     <div class="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6 space-y-6 mt-4">
         <h1 class="text-2xl font-bold text-center text-green-700">預約治療師</h1>
         
         <div class="p-4 bg-green-50 rounded-lg border border-green-100 text-sm text-green-800">
             <p>👋 <span id="user-name" class="font-bold">訪客</span> 您好！</p>
-            <p class="mt-1">請填寫下方資料，您的填寫進度將自動保存。</p>
+            <p class="mt-1" id="page-hint">請填寫下方資料，填寫進度將自動保存。</p>
         </div>
 
-        <!-- 預約表單 -->
-        <form id="bookingForm" class="space-y-4">
+        <!-- ================= 表單填寫區 (Form Section) ================= -->
+        <div id="form-section">
+            <form id="bookingForm" class="space-y-4" onsubmit="return false;">
+                
+                <!-- 姓名 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">姓名</label>
+                    <input type="text" id="name" required onchange="syncData()" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 border p-2" placeholder="請輸入您的真實姓名">
+                </div>
+
+                <!-- 電話 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">電話</label>
+                    <input type="tel" id="phone" required onchange="syncData()" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 border p-2" placeholder="請輸入聯絡電話">
+                </div>
+
+                <!-- 指定治療師 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">指定治療師</label>
+                    <select id="therapist" onchange="syncData()" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 border p-2 bg-white">
+                        <option value="不指定">不指定</option>
+                        <option value="AAA">AAA 治療師</option>
+                        <option value="BBB">BBB 治療師</option>
+                    </select>
+                </div>
+
+                <!-- 期望預約時間 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">期望預約時間/時段</label>
+                    <textarea id="time_slots" required rows="3" onchange="syncData()" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 border p-2" placeholder="建議填寫至少三個時段，例如：&#10;1/5 下午 2:00&#10;1/6 上午 10:00&#10;1/8 晚上 7:00"></textarea>
+                </div>
+
+                <!-- 按鈕區 -->
+                <div class="flex space-x-3 pt-4">
+                    <button type="button" onclick="cancelForm()" class="w-1/3 py-3 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition font-bold">
+                        取消
+                    </button>
+                    <button type="button" onclick="toReview()" class="w-2/3 py-3 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-bold shadow-md">
+                        下一步：預覽確認
+                    </button>
+                </div>
+                <p id="sync-status" class="text-xs text-center text-gray-400 h-4 mt-2"></p>
+            </form>
+        </div>
+
+        <!-- ================= 預覽確認區 (Review Section) ================= -->
+        <div id="review-section" class="hidden space-y-4">
+            <h2 class="text-lg font-bold text-gray-700 border-b pb-2">請確認您的預約內容</h2>
             
-            <!-- 姓名 (加入 onchange 自動同步) -->
-            <div>
-                <label for="name" class="block text-sm font-medium text-gray-700">姓名</label>
-                <input type="text" id="name" required onchange="syncData()" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 border p-2" placeholder="請輸入您的真實姓名">
+            <div class="space-y-3 text-sm">
+                <div>
+                    <span class="text-gray-500 block">姓名</span>
+                    <span id="review-name" class="font-bold text-lg text-gray-800"></span>
+                </div>
+                <div>
+                    <span class="text-gray-500 block">電話</span>
+                    <span id="review-phone" class="font-bold text-gray-800"></span>
+                </div>
+                <div>
+                    <span class="text-gray-500 block">指定治療師</span>
+                    <span id="review-therapist" class="font-bold text-gray-800"></span>
+                </div>
+                <div>
+                    <span class="text-gray-500 block">期望時間</span>
+                    <pre id="review-time" class="font-bold text-gray-800 whitespace-pre-wrap font-sans"></pre>
+                </div>
             </div>
 
-            <!-- 電話 (加入 onchange 自動同步) -->
-            <div>
-                <label for="phone" class="block text-sm font-medium text-gray-700">電話</label>
-                <input type="tel" id="phone" required onchange="syncData()" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 border p-2" placeholder="請輸入聯絡電話">
+            <!-- 按鈕區 -->
+            <div class="flex flex-col space-y-3 pt-4">
+                <button type="button" onclick="confirmSubmit()" class="w-full py-3 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-bold shadow-lg text-lg">
+                    確認送出
+                </button>
+                
+                <div class="flex space-x-3">
+                    <button type="button" onclick="cancelForm()" class="w-1/2 py-3 bg-red-100 text-red-600 rounded-md hover:bg-red-200 transition font-bold">
+                        取消預約
+                    </button>
+                    <button type="button" onclick="backToEdit()" class="w-1/2 py-3 bg-yellow-100 text-yellow-700 rounded-md hover:bg-yellow-200 transition font-bold">
+                        返回修改
+                    </button>
+                </div>
             </div>
+        </div>
 
-            <!-- 指定治療師 (加入 onchange 自動同步) -->
-            <div>
-                <label for="therapist" class="block text-sm font-medium text-gray-700">指定治療師</label>
-                <select id="therapist" onchange="syncData()" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 border p-2 bg-white">
-                    <option value="不指定">不指定</option>
-                    <option value="AAA">AAA 治療師</option>
-                    <option value="BBB">BBB 治療師</option>
-                </select>
-            </div>
-
-            <!-- 期望預約時間 (加入 onchange 自動同步) -->
-            <div>
-                <label for="time_slots" class="block text-sm font-medium text-gray-700">期望預約時間/時段</label>
-                <textarea id="time_slots" required rows="3" onchange="syncData()" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 border p-2" placeholder="建議填寫至少三個時段，例如：&#10;1/5 下午 2:00&#10;1/6 上午 10:00&#10;1/8 晚上 7:00"></textarea>
-            </div>
-
-            <!-- 送出按鈕 -->
-            <button type="submit" id="submit-btn" class="w-full py-3 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-bold shadow-md">
-                確認送出預約
-            </button>
-            <p id="sync-status" class="text-xs text-center text-gray-400 h-4"></p>
-
-        </form>
     </div>
 
     <script>
@@ -100,7 +148,7 @@
                 
                 document.getElementById('user-name').textContent = g_displayName;
 
-                // 1. 開啟紀錄 (只寫入 UID, Name, 開啟狀態)
+                // 1. 開啟紀錄
                 fetch(GAS_URL, {
                     method: 'POST',
                     mode: 'no-cors',
@@ -127,13 +175,109 @@
             }
         }
 
-        // 資料同步函式 (當欄位變動時觸發)
+        // --- 核心功能函式 ---
+
+        // 1. 資料同步 (背景執行)
         function syncData(actionType = 'sync_data') {
             const statusLabel = document.getElementById('sync-status');
-            statusLabel.textContent = "資料同步中...";
+            if (statusLabel) statusLabel.textContent = "資料同步中...";
 
-            const formData = {
-                type: actionType, // sync_data (填寫中) 或 submit_form (已送出)
+            const formData = getFormData();
+            formData.type = actionType;
+
+            fetch(GAS_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData)
+            }).then(() => {
+                if (actionType === 'sync_data' && statusLabel) {
+                    statusLabel.textContent = "進度已自動保存";
+                    setTimeout(() => statusLabel.textContent = "", 2000);
+                }
+            });
+            return formData;
+        }
+
+        // 2. 前往預覽頁面
+        function toReview() {
+            // 簡易驗證
+            const name = document.getElementById('name').value.trim();
+            const phone = document.getElementById('phone').value.trim();
+            const time = document.getElementById('time_slots').value.trim();
+            
+            if (!name || !phone || !time) {
+                alert("請完整填寫姓名、電話與期望時間");
+                return;
+            }
+
+            // 填入預覽資料
+            document.getElementById('review-name').textContent = name;
+            document.getElementById('review-phone').textContent = phone;
+            document.getElementById('review-therapist').textContent = document.getElementById('therapist').value;
+            document.getElementById('review-time').textContent = time;
+
+            // 切換畫面
+            document.getElementById('form-section').classList.add('hidden');
+            document.getElementById('review-section').classList.remove('hidden');
+            document.getElementById('page-hint').textContent = "請再次確認您的預約內容是否正確。";
+            
+            // 捲動到頂部
+            window.scrollTo(0, 0);
+        }
+
+        // 3. 返回修改
+        function backToEdit() {
+            document.getElementById('review-section').classList.add('hidden');
+            document.getElementById('form-section').classList.remove('hidden');
+            document.getElementById('page-hint').textContent = "請填寫下方資料，填寫進度將自動保存。";
+        }
+
+        // 4. 取消表單
+        async function cancelForm() {
+            if (!confirm("確定要取消預約嗎？\n您的填寫內容將不會被送出。")) return;
+
+            // 傳送取消狀態給 GAS
+            fetch(GAS_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'cancel_form',
+                    uid: g_uid,
+                    name: g_displayName
+                })
+            });
+
+            liff.closeWindow();
+        }
+
+        // 5. 確認送出 (最終)
+        async function confirmSubmit() {
+            // 鎖定按鈕
+            const btn = document.querySelector('button[onclick="confirmSubmit()"]');
+            btn.disabled = true;
+            btn.innerText = "資料傳送中...";
+
+            // 同步最後狀態為 submit_form
+            const formData = syncData('submit_form');
+
+            try {
+                if (liff.isInClient()) {
+                    const msg = `#預約資料送出\n姓名：${formData.form_name}\n指定：${formData.form_therapist}\n時間：${formData.form_time}`;
+                    await liff.sendMessages([{ type: 'text', text: msg }]);
+                }
+                liff.closeWindow();
+            } catch (error) {
+                alert('發送失敗: ' + error);
+                btn.disabled = false;
+                btn.innerText = "確認送出";
+            }
+        }
+
+        // 輔助：取得表單資料物件
+        function getFormData() {
+            return {
                 uid: g_uid,
                 line_name: g_displayName,
                 form_name: document.getElementById('name').value,
@@ -141,50 +285,7 @@
                 form_therapist: document.getElementById('therapist').value,
                 form_time: document.getElementById('time_slots').value
             };
-
-            // 使用 fetch 傳送 (不等待回傳，避免卡頓)
-            fetch(GAS_URL, {
-                method: 'POST',
-                mode: 'no-cors',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
-            }).then(() => {
-                if(actionType === 'sync_data') {
-                    statusLabel.textContent = "進度已自動保存";
-                    setTimeout(() => statusLabel.textContent = "", 2000);
-                }
-            });
-            
-            return formData; // 回傳資料供 submit 使用
         }
-
-        // 表單送出事件 (最終送出)
-        document.getElementById('bookingForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const btn = document.getElementById('submit-btn');
-            btn.disabled = true;
-            btn.innerText = "送出中...";
-
-            // 1. 呼叫同步函式，但狀態改為 'submit_form' (已送出)
-            const formData = syncData('submit_form');
-
-            try {
-                // 2. 意圖宣告 (發送資料到聊天室)
-                if (liff.isInClient()) {
-                    const msg = `#預約資料送出\n姓名：${formData.form_name}\n指定：${formData.form_therapist}\n時間：${formData.form_time}`;
-                    await liff.sendMessages([{ type: 'text', text: msg }]);
-                }
-
-                // 3. 直接關閉視窗 (不跳 alert)
-                liff.closeWindow();
-
-            } catch (error) {
-                alert('發送失敗: ' + error);
-                btn.disabled = false;
-                btn.innerText = "確認送出預約";
-            }
-        });
     </script>
 </body>
 </html>
