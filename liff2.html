@@ -1,4 +1,4 @@
-<!-- ver0.16 取消畫面優化版 -->
+<!-- ver0.19 排程優化版 -->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -9,7 +9,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { visibility: hidden; }
-        /* Loading 遮罩樣式 */
         #loading { visibility: visible; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; display: flex; justify-content: center; align-items: center; z-index: 999; }
         .hidden { display: none; }
     </style>
@@ -17,9 +16,9 @@
 <body class="bg-gray-50 p-6 relative">
 
     <!-- 版本號 -->
-    <div class="absolute top-2 right-2 text-xs text-gray-400 font-mono bg-gray-200 px-2 py-1 rounded">ver0.16</div>
+    <div class="absolute top-2 right-2 text-xs text-gray-400 font-mono bg-gray-200 px-2 py-1 rounded">ver0.19</div>
 
-    <!-- Loading / 狀態提示畫面 -->
+    <!-- Loading -->
     <div id="loading">
         <div class="text-center">
             <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-green-500 mx-auto mb-4"></div>
@@ -129,6 +128,7 @@
         
         let g_uid = "";
         let g_displayName = "";
+        let heartbeatInterval = null; 
 
         window.onload = function() {
             initializeLiff();
@@ -149,7 +149,7 @@
                 
                 document.getElementById('user-name').textContent = g_displayName;
 
-                // 1. 開啟紀錄 (背景執行)
+                // 1. 開啟紀錄
                 fetch(GAS_URL, {
                     method: 'POST',
                     mode: 'no-cors',
@@ -166,6 +166,9 @@
                     await liff.sendMessages([{ type: 'text', text: '預約治療師' }]);
                 }
 
+                // 3. 啟動心跳 (20分鐘一次)
+                startHeartbeat();
+
                 document.body.style.visibility = 'visible';
                 document.getElementById('loading').style.display = 'none';
 
@@ -176,9 +179,29 @@
             }
         }
 
+        // --- 心跳機制 ---
+        function startHeartbeat() {
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
+            // 每 20 分鐘 (1200000ms) 發送一次
+            heartbeatInterval = setInterval(() => {
+                fetch(GAS_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'heartbeat',
+                        uid: g_uid
+                    })
+                });
+            }, 1200000); 
+        }
+
+        function stopHeartbeat() {
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
+        }
+
         // --- 核心功能函式 ---
 
-        // 1. 資料同步 (背景執行，回傳 Promise)
         function syncData(actionType = 'sync_data') {
             const statusLabel = document.getElementById('sync-status');
             if (statusLabel) statusLabel.textContent = "資料同步中...";
@@ -200,7 +223,6 @@
             });
         }
 
-        // 2. 前往預覽頁面
         function toReview() {
             const name = document.getElementById('name').value.trim();
             const phone = document.getElementById('phone').value.trim();
@@ -216,35 +238,29 @@
             document.getElementById('review-therapist').textContent = document.getElementById('therapist').value;
             document.getElementById('review-time').textContent = time;
 
-            // 更新後端狀態為 "送出前預覽"
             syncData('preview_form');
 
             document.getElementById('form-section').classList.add('hidden');
             document.getElementById('review-section').classList.remove('hidden');
             document.getElementById('page-hint').textContent = "請再次確認您的預約內容是否正確。";
-            
             window.scrollTo(0, 0);
         }
 
-        // 3. 返回修改
         function backToEdit() {
             document.getElementById('review-section').classList.add('hidden');
             document.getElementById('form-section').classList.remove('hidden');
             document.getElementById('page-hint').textContent = "請填寫下方資料，填寫進度將自動保存。";
         }
 
-        // 4. 取消表單 (優化：顯示取消畫面)
         async function cancelForm() {
-            // 不再跳 confirm，直接執行取消
-            
-            // 【UI優化】立即顯示全版遮罩與文字
+            stopHeartbeat(); 
+
             const loadingDiv = document.getElementById('loading');
             const loadingText = document.getElementById('loading-text');
             loadingText.textContent = "正在取消預約...";
-            loadingDiv.style.display = 'flex'; // 強制顯示 flex 以置中
+            loadingDiv.style.display = 'flex';
 
             try {
-                // 發送取消請求，設定 3 秒逾時
                 await Promise.race([
                     fetch(GAS_URL, {
                         method: 'POST',
@@ -259,15 +275,15 @@
                     new Promise(resolve => setTimeout(resolve, 3000))
                 ]);
             } catch (e) {
-                console.error("Cancel timeout or error", e);
+                console.error("Cancel error", e);
             }
 
-            // 完成後關閉視窗
             liff.closeWindow();
         }
 
-        // 5. 確認送出
         async function confirmSubmit() {
+            stopHeartbeat(); 
+
             const btn = document.querySelector('button[onclick="confirmSubmit()"]');
             btn.disabled = true;
             btn.innerText = "資料傳送中...";
@@ -289,6 +305,7 @@
                 alert('傳送失敗: ' + error + '\n請重新嘗試送出。');
                 btn.disabled = false;
                 btn.innerText = "確認送出";
+                startHeartbeat(); 
             }
         }
 
