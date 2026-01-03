@@ -1,79 +1,52 @@
-<!-- ver0.01 -->
+<!-- ver0.02 測試簡化版 -->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>物理治療預約</title>
+    <title>連線測試</title>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* 隱藏載入前的畫面 */
         body { visibility: hidden; }
-        /* 顯示 Loading 遮罩 */
         #loading { visibility: visible; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; display: flex; justify-content: center; align-items: center; z-index: 999; }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-800 relative">
+<body class="bg-gray-100 p-6">
 
-    <!-- 版本號顯示 (方便 Debug) -->
-    <div class="absolute top-2 right-2 text-xs text-gray-400 font-mono z-10">ver0.01</div>
+    <!-- 版本號 -->
+    <div class="absolute top-2 right-2 text-xs text-gray-400 font-mono">ver0.02 Test</div>
 
-    <!-- Loading 畫面 -->
+    <!-- Loading -->
     <div id="loading">
         <div class="text-center">
-            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500 mx-auto mb-4"></div>
-            <p class="text-gray-500">系統連線中...</p>
+            <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p>測試連線中...</p>
         </div>
     </div>
 
-    <!-- 主要內容 -->
-    <div class="max-w-md mx-auto p-6 bg-white min-h-screen shadow-lg relative">
-        <h1 class="text-2xl font-bold text-center text-green-600 mb-6">預約掛號單</h1>
+    <!-- 測試面板 -->
+    <div class="max-w-md mx-auto bg-white rounded-lg shadow p-6 space-y-6">
+        <h1 class="text-xl font-bold text-center text-blue-600">系統連線測試</h1>
         
-        <form id="bookingForm" class="space-y-4">
-            <!-- 日期 -->
-            <div>
-                <label class="block text-sm font-medium text-gray-700">預約日期</label>
-                <input type="date" id="date" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 border p-2" required>
-            </div>
+        <div class="p-4 bg-gray-50 rounded text-sm text-gray-600 space-y-2">
+            <p>1. 網頁開啟時，已自動傳送資料給 GAS。</p>
+            <p>2. 網頁開啟時，已自動在聊天室發送「訊息發送測試」。</p>
+        </div>
 
-            <!-- 時間 -->
-            <div>
-                <label class="block text-sm font-medium text-gray-700">預約時間</label>
-                <select id="time" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 border p-2" required>
-                    <option value="">請選擇時段</option>
-                    <option value="09:00">09:00</option>
-                    <option value="10:00">10:00</option>
-                    <option value="11:00">11:00</option>
-                    <option value="14:00">14:00</option>
-                    <option value="15:00">15:00</option>
-                    <option value="16:00">16:00</option>
-                </select>
-            </div>
+        <hr>
 
-            <!-- 項目 -->
-            <div>
-                <label class="block text-sm font-medium text-gray-700">治療項目/部位</label>
-                <input type="text" id="part" placeholder="例如：腰部、肩膀" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 border p-2" required>
-            </div>
-
-            <!-- 備註 -->
-            <div>
-                <label class="block text-sm font-medium text-gray-700">備註 (選填)</label>
-                <textarea id="note" rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 border p-2"></textarea>
-            </div>
-
-            <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
-                確認預約
+        <div class="text-center">
+            <p class="mb-2 text-gray-700 font-medium">手動測試 API 回覆</p>
+            <button onclick="sendTestReply()" class="w-full py-3 bg-blue-600 text-white rounded hover:bg-blue-700 transition">
+                點擊發送 "API回覆測試"
             </button>
-        </form>
-        
-        <p class="text-xs text-center text-gray-400 mt-6">送出後請留意聊天室確認訊息</p>
+            <p class="text-xs text-gray-400 mt-2">點擊後，請關閉視窗查看機器人是否有回應</p>
+        </div>
     </div>
 
     <script>
-        // 設定區
+        // 設定區 (請確認您的 LIFF ID 和 GAS URL)
         const LIFF_ID = '2008806287-jfDxgE50'; 
         const GAS_URL = 'https://script.google.com/macros/s/AKfycbwcNsPso4DX3T87JhPjgR32pw804dUF0CbwlpiAUBMr4l-HibOtCUYMHPs9UtaA4-khzw/exec';
 
@@ -85,83 +58,57 @@
             try {
                 await liff.init({ liffId: LIFF_ID });
                 
-                // 檢查是否登入
                 if (!liff.isLoggedIn()) {
                     liff.login();
                     return;
                 }
 
-                // 1. 取得基本資料 (使用 ID Token 比較快)
-                const idToken = liff.getDecodedIDToken();
-                const uid = idToken.sub;
-                const displayName = idToken.name || "未知用戶";
-                
-                // 2. 靜默傳送開啟紀錄到 GAS
+                // 1. 測試：傳送資料到 GAS (靜默)
+                // 需求：傳送到 GAS "GAS資料傳送測試欄位1、2、3..."
                 fetch(GAS_URL, {
                     method: 'POST',
                     mode: 'no-cors',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        type: 'track_open',
-                        uid: uid,
-                        name: displayName
+                        type: 'test_connection', // 告訴 GAS 這是測試
+                        data1: 'GAS資料傳送測試欄位1',
+                        data2: 'GAS資料傳送測試欄位2',
+                        data3: 'GAS資料傳送測試欄位3'
                     })
                 });
 
-                // 3. 意圖宣告：幫使用者在聊天室發送 "我要預約"
+                // 2. 測試：自動發送訊息 (意圖宣告)
+                // 需求：客戶端發送 "訊息發送測試"
                 if (liff.getContext().type !== 'none') {
-                    // 為了避免重複發送，可以使用 localStorage 簡單判斷，
-                    // 但依照您的需求，每次開啟都發送也是可以的。
-                    // 若要避免重新整理頁面時一直發送，可考慮加一些判斷邏輯。
                     await liff.sendMessages([{
                         type: 'text',
-                        text: '我要預約'
+                        text: '訊息發送測試'
                     }]);
                 }
 
-                // 顯示頁面
+                // 顯示畫面
                 document.body.style.visibility = 'visible';
                 document.getElementById('loading').style.display = 'none';
 
-                // 預填日期為明天
-                const tomorrow = new Date();
-                tomorrow.setDate(tomorrow.getDate() + 1);
-                document.getElementById('date').valueAsDate = tomorrow;
-
             } catch (error) {
-                console.error('LIFF Init Error:', error);
-                alert('系統初始化失敗：' + error);
-                // 即使失敗也顯示頁面，方便查看錯誤
+                alert('初始化錯誤: ' + error);
                 document.body.style.visibility = 'visible';
                 document.getElementById('loading').style.display = 'none';
             }
         }
 
-        // 表單送出事件
-        document.getElementById('bookingForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            const date = document.getElementById('date').value;
-            const time = document.getElementById('time').value;
-            const part = document.getElementById('part').value;
-            const note = document.getElementById('note').value;
-
-            // 組合預約訊息格式
-            const messageText = `#預約\n日期：${date}\n時間：${time}\n項目：${part}\n備註：${note}`;
-
+        // 手動觸發 API 回覆測試
+        async function sendTestReply() {
             try {
-                // 傳送標準格式訊息回聊天室
                 await liff.sendMessages([{
                     type: 'text',
-                    text: messageText
+                    text: 'API回覆測試'
                 }]);
-
-                // 成功後關閉視窗
-                liff.closeWindow();
+                liff.closeWindow(); // 傳送後關閉視窗，方便看結果
             } catch (error) {
-                alert('訊息發送失敗：' + error);
+                alert('發送失敗: ' + error);
             }
-        });
+        }
     </script>
 </body>
 </html>
