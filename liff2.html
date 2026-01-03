@@ -1,4 +1,4 @@
-<!-- ver0.02 測試簡化版 -->
+<!-- ver0.03 測試簡化版 -->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -12,10 +12,10 @@
         #loading { visibility: visible; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; display: flex; justify-content: center; align-items: center; z-index: 999; }
     </style>
 </head>
-<body class="bg-gray-100 p-6">
+<body class="bg-gray-100 p-6 relative">
 
-    <!-- 版本號 -->
-    <div class="absolute top-2 right-2 text-xs text-gray-400 font-mono">ver0.02 Test</div>
+    <!-- 版本號顯示 (右上角) -->
+    <div class="absolute top-2 right-2 text-xs text-gray-400 font-mono bg-gray-200 px-2 py-1 rounded">ver0.03 Test</div>
 
     <!-- Loading -->
     <div id="loading">
@@ -26,12 +26,12 @@
     </div>
 
     <!-- 測試面板 -->
-    <div class="max-w-md mx-auto bg-white rounded-lg shadow p-6 space-y-6">
+    <div class="max-w-md mx-auto bg-white rounded-lg shadow p-6 space-y-6 mt-6">
         <h1 class="text-xl font-bold text-center text-blue-600">系統連線測試</h1>
         
         <div class="p-4 bg-gray-50 rounded text-sm text-gray-600 space-y-2">
-            <p>1. 網頁開啟時，已自動傳送資料給 GAS。</p>
-            <p>2. 網頁開啟時，已自動在聊天室發送「訊息發送測試」。</p>
+            <p>1. 網頁開啟時，自動傳送資料給 GAS。</p>
+            <p>2. 網頁開啟時，自動在聊天室發送「訊息發送測試」。</p>
         </div>
 
         <hr>
@@ -64,13 +64,12 @@
                 }
 
                 // 1. 測試：傳送資料到 GAS (靜默)
-                // 需求：傳送到 GAS "GAS資料傳送測試欄位1、2、3..."
                 fetch(GAS_URL, {
                     method: 'POST',
                     mode: 'no-cors',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        type: 'test_connection', // 告訴 GAS 這是測試
+                        type: 'test_connection',
                         data1: 'GAS資料傳送測試欄位1',
                         data2: 'GAS資料傳送測試欄位2',
                         data3: 'GAS資料傳送測試欄位3'
@@ -78,7 +77,6 @@
                 });
 
                 // 2. 測試：自動發送訊息 (意圖宣告)
-                // 需求：客戶端發送 "訊息發送測試"
                 if (liff.getContext().type !== 'none') {
                     await liff.sendMessages([{
                         type: 'text',
@@ -97,14 +95,13 @@
             }
         }
 
-        // 手動觸發 API 回覆測試
         async function sendTestReply() {
             try {
                 await liff.sendMessages([{
                     type: 'text',
                     text: 'API回覆測試'
                 }]);
-                liff.closeWindow(); // 傳送後關閉視窗，方便看結果
+                liff.closeWindow(); 
             } catch (error) {
                 alert('發送失敗: ' + error);
             }
