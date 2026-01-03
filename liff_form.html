@@ -1,4 +1,4 @@
-<!-- v1.3 Appointment App - No Alerts, Custom Result Pages -->
+<!-- v1.4 Appointment App - Updated Message Format -->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -25,7 +25,7 @@
         <div class="bg-[#06C755] text-white p-4 flex items-center justify-center relative shadow-md">
             <h1 class="text-lg font-bold">線上預約服務</h1>
             <!-- 版本號顯示 -->
-            <div class="absolute top-0 right-0 p-2 text-[10px] text-white/70 font-mono">v1.3</div>
+            <div class="absolute top-0 right-0 p-2 text-[10px] text-white/70 font-mono">v1.4</div>
         </div>
 
         <!-- 歡迎詞與使用者資訊 -->
@@ -379,7 +379,8 @@
         }
 
         function sendLineMessageAndClose(name, phone, therapist, time) {
-            const msg = `您已留下預約\n姓名：${name}\n電話：${phone}\n指定治療師：${therapist}\n預期時間：${time}\n\n待人工處理後會與您聯繫`;
+            // 這裡傳送的是 "使用者" 身分送出的訊息 (對話紀錄)
+            const msg = `姓名: ${name}\n電話: ${phone}\n指定治療師: ${therapist}\n期望預約時間: ${time}`;
 
             if (liff.isInClient()) {
                 liff.sendMessages([{ type: 'text', text: msg }])
