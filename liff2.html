@@ -1,4 +1,4 @@
-<!-- ver0.21 UI Compact Fix -->
+<!-- ver0.23 -->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -17,8 +17,8 @@
 </head>
 <body class="bg-gray-50 p-3 relative min-h-screen">
 
-    <!-- 版本號 (移至最右下角) -->
-    <div class="fixed bottom-1 right-1 text-[10px] text-gray-300 font-mono z-0 pointer-events-none">ver0.21 UI</div>
+    <!-- 版本號 (移至最右下角，僅顯示數字) -->
+    <div class="fixed bottom-1 right-1 text-[10px] text-gray-300 font-mono z-0 pointer-events-none">ver0.23</div>
 
     <!-- Loading -->
     <div id="loading">
@@ -94,7 +94,7 @@
                     <span id="review-phone" class="font-bold text-gray-800"></span>
                 </div>
                 <div class="flex justify-between border-b border-gray-200 pb-1">
-                    <span class="text-gray-500">指定</span>
+                    <span class="text-gray-500">指定治療師</span>
                     <span id="review-therapist" class="font-bold text-gray-800"></span>
                 </div>
                 <div>
@@ -297,7 +297,8 @@
                 const formData = await syncData('submit_form', true);
 
                 if (liff.isInClient()) {
-                    const msg = `#預約資料送出\n姓名：${formData.form_name}\n指定：${formData.form_therapist}\n時間：${formData.form_time}`;
+                    // 更新訊息格式，加入電話，並修改標題
+                    const msg = `預約資料如下\n姓名: ${formData.form_name}\n電話: ${formData.form_phone}\n指定治療師: ${formData.form_therapist}\n期望時間: ${formData.form_time}`;
                     await liff.sendMessages([{ type: 'text', text: msg }]);
                 }
                 
