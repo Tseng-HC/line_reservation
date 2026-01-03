@@ -1,10 +1,10 @@
-<!-- ver0.08 PC模擬測試版 -->
+<!-- ver0.09 正式準備版 -->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>連線測試</title>
+    <title>預約治療師</title>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -12,41 +12,37 @@
         #loading { visibility: visible; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; display: flex; justify-content: center; align-items: center; z-index: 999; }
     </style>
 </head>
-<body class="bg-gray-100 p-6 relative">
+<body class="bg-gray-50 p-6 relative">
 
     <!-- 版本號 -->
-    <div class="absolute top-2 right-2 text-xs text-gray-400 font-mono bg-gray-200 px-2 py-1 rounded">ver0.08 PC Sim</div>
+    <div class="absolute top-2 right-2 text-xs text-gray-400 font-mono bg-gray-200 px-2 py-1 rounded">ver0.09</div>
 
     <!-- Loading -->
     <div id="loading">
         <div class="text-center">
-            <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto mb-4"></div>
-            <p>系統啟動中...</p>
+            <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-green-500 mx-auto mb-4"></div>
+            <p class="text-gray-500">載入預約系統...</p>
         </div>
     </div>
 
-    <!-- 測試面板 -->
-    <div class="max-w-md mx-auto bg-white rounded-lg shadow p-6 space-y-6 mt-6">
-        <h1 class="text-xl font-bold text-center text-blue-600">系統連線測試</h1>
+    <!-- 預約面板 -->
+    <div class="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6 space-y-6 mt-4">
+        <h1 class="text-2xl font-bold text-center text-green-700">預約治療師</h1>
         
-        <!-- 環境偵測顯示 -->
-        <div id="env-status" class="text-center text-xs font-bold px-2 py-1 rounded bg-gray-100 text-gray-500">
-            偵測環境中...
+        <div class="p-4 bg-green-50 rounded-lg border border-green-100 text-sm text-green-800">
+            <p>👋 <span id="user-name" class="font-bold">訪客</span> 您好！</p>
+            <p class="mt-1">系統已自動登入，您可以開始填寫預約表單。</p>
         </div>
 
-        <div class="p-4 bg-gray-50 rounded text-sm text-gray-600 space-y-2">
-            <p>1. 網頁開啟資料傳送：<span id="step1-status" class="text-gray-400">等待中...</span></p>
-            <p>2. 聊天室訊息發送：<span id="step2-status" class="text-gray-400">等待中...</span></p>
-        </div>
-
-        <hr>
-
-        <div class="text-center">
-            <p class="mb-2 text-gray-700 font-medium">功能測試</p>
-            <button id="btn-reply" onclick="handleAction()" class="w-full py-3 bg-blue-600 text-white rounded hover:bg-blue-700 transition">
-                發送 "API回覆測試"
+        <div class="space-y-4">
+            <!-- 這裡預留給表單欄位 -->
+            <div class="h-32 bg-gray-100 rounded flex items-center justify-center text-gray-400 border-dashed border-2">
+                (預約表單區域)
+            </div>
+            
+            <button id="btn-reply" onclick="sendTestReply()" class="w-full py-3 bg-gray-600 text-white rounded hover:bg-gray-700 transition">
+                測試 API 回覆 (除錯用)
             </button>
-            <p id="hint-text" class="text-xs text-gray-400 mt-2">點擊後請留意聊天室</p>
         </div>
     </div>
 
@@ -62,95 +58,64 @@
             try {
                 await liff.init({ liffId: LIFF_ID });
                 
-                // PC 瀏覽器登入檢查
                 if (!liff.isLoggedIn()) {
                     liff.login();
                     return; 
                 }
 
-                const envStatus = document.getElementById('env-status');
-                const step1 = document.getElementById('step1-status');
-                const step2 = document.getElementById('step2-status');
-                const btn = document.getElementById('btn-reply');
-                const hint = document.getElementById('hint-text');
+                // 取得使用者資料
+                const idToken = liff.getDecodedIDToken();
+                const uid = idToken.sub;
+                const displayName = idToken.name || "用戶";
+                
+                // 顯示名字在畫面上
+                document.getElementById('user-name').textContent = displayName;
 
-                // 1. 環境判斷
-                if (liff.isInClient()) {
-                    // --- 手機/LINE內 (真實模式) ---
-                    envStatus.textContent = "環境：LINE App (真實模式)";
-                    envStatus.className = "text-center text-xs font-bold px-2 py-1 rounded bg-green-100 text-green-700";
-                    btn.textContent = "發送 (真實API測試)";
-                } else {
-                    // --- 電腦/Chrome (模擬模式) ---
-                    envStatus.textContent = "環境：外部瀏覽器 (模擬模式)";
-                    envStatus.className = "text-center text-xs font-bold px-2 py-1 rounded bg-yellow-100 text-yellow-700";
-                    btn.textContent = "發送 (模擬測試)";
-                    hint.textContent = "模擬模式：僅寫入Sheet，機器人不會回話";
-                }
-
-                // 2. 自動傳送資料給 GAS
+                // 1. 靜默傳送資料給 GAS (紀錄時間、UID、名稱)
                 fetch(GAS_URL, {
                     method: 'POST',
                     mode: 'no-cors',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        type: 'test_connection',
-                        data1: liff.isInClient() ? '手機開啟' : '電腦開啟',
-                        data2: liff.getOS(),
-                        data3: '資料傳輸成功'
+                        type: 'track_open',
+                        uid: uid,
+                        name: displayName
                     })
                 });
-                step1.textContent = "✅ 已送出";
-                step1.className = "text-green-600 font-bold";
 
-                // 3. 意圖宣告 (區分環境)
+                // 2. 意圖宣告：發送 "預約治療師"
+                // 僅在手機/LINE App 內執行，避免電腦版報錯
                 if (liff.isInClient()) {
-                    await liff.sendMessages([{ type: 'text', text: '訊息發送測試' }]);
-                    step2.textContent = "✅ 已發送 (看聊天室)";
-                    step2.className = "text-green-600 font-bold";
-                } else {
-                    step2.textContent = "⚠️ 已略過 (模擬中)";
-                    step2.className = "text-orange-400";
+                    await liff.sendMessages([{
+                        type: 'text',
+                        text: '預約治療師'
+                    }]);
                 }
 
+                // 顯示畫面
                 document.body.style.visibility = 'visible';
                 document.getElementById('loading').style.display = 'none';
 
             } catch (error) {
                 alert('初始化錯誤: ' + error);
-                document.body.style.visibility = 'visible';
+                document.body.style.visibility = 'visible'; // 出錯也要顯示，不然會白畫面
                 document.getElementById('loading').style.display = 'none';
             }
         }
 
-        // 統一處理按鈕動作
-        async function handleAction() {
-            if (liff.isInClient()) {
-                // --- 手機：真的發送訊息 ---
-                try {
-                    await liff.sendMessages([{ type: 'text', text: 'API回覆測試' }]);
-                    liff.closeWindow();
-                } catch (error) {
-                    alert('發送失敗: ' + error);
-                }
-            } else {
-                // --- 電腦：模擬傳送資料給 GAS ---
-                try {
-                    await fetch(GAS_URL, {
-                        method: 'POST',
-                        mode: 'no-cors',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            type: 'test_connection',
-                            data1: '模擬按鈕點擊',
-                            data2: '電腦端測試',
-                            data3: '無法觸發機器人回覆'
-                        })
-                    });
-                    alert('【模擬成功】\n資料已傳送給 GAS，請檢查 Google Sheet。\n(注意：因為沒有 Token，機器人無法在聊天室回話)');
-                } catch (error) {
-                    alert('模擬失敗: ' + error);
-                }
+        async function sendTestReply() {
+            if (!liff.isInClient()) {
+                alert('此功能僅限 LINE App 內使用');
+                return;
+            }
+            try {
+                await liff.sendMessages([{
+                    type: 'text',
+                    text: 'API回覆測試'
+                }]);
+                liff.closeWindow();
+            } catch (error) {
+                alert('發送失敗: ' + error);
             }
         }
     </script>
