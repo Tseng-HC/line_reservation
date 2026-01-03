@@ -1,4 +1,4 @@
-<!-- ver0.10 工作表名稱更新版 -->
+<!-- ver0.11 表單功能實作版 -->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -15,7 +15,7 @@
 <body class="bg-gray-50 p-6 relative">
 
     <!-- 版本號 -->
-    <div class="absolute top-2 right-2 text-xs text-gray-400 font-mono bg-gray-200 px-2 py-1 rounded">ver0.10</div>
+    <div class="absolute top-2 right-2 text-xs text-gray-400 font-mono bg-gray-200 px-2 py-1 rounded">ver0.11</div>
 
     <!-- Loading -->
     <div id="loading">
@@ -31,24 +31,56 @@
         
         <div class="p-4 bg-green-50 rounded-lg border border-green-100 text-sm text-green-800">
             <p>👋 <span id="user-name" class="font-bold">訪客</span> 您好！</p>
-            <p class="mt-1">系統已自動登入，您可以開始填寫預約表單。</p>
+            <p class="mt-1">請填寫下方資料以完成預約。</p>
         </div>
 
-        <div class="space-y-4">
-            <!-- 這裡預留給表單欄位 -->
-            <div class="h-32 bg-gray-100 rounded flex items-center justify-center text-gray-400 border-dashed border-2">
-                (預約表單區域)
-            </div>
+        <!-- 預約表單 -->
+        <form id="bookingForm" class="space-y-4">
             
-            <button id="btn-reply" onclick="sendTestReply()" class="w-full py-3 bg-gray-600 text-white rounded hover:bg-gray-700 transition">
-                測試 API 回覆 (除錯用)
+            <!-- 姓名 -->
+            <div>
+                <label for="name" class="block text-sm font-medium text-gray-700">姓名</label>
+                <input type="text" id="name" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 border p-2" placeholder="請輸入您的真實姓名">
+            </div>
+
+            <!-- 電話 -->
+            <div>
+                <label for="phone" class="block text-sm font-medium text-gray-700">電話</label>
+                <input type="tel" id="phone" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 border p-2" placeholder="請輸入聯絡電話">
+            </div>
+
+            <!-- 指定治療師 -->
+            <div>
+                <label for="therapist" class="block text-sm font-medium text-gray-700">指定治療師</label>
+                <select id="therapist" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 border p-2 bg-white">
+                    <option value="不指定">不指定</option>
+                    <option value="AAA">AAA 治療師</option>
+                    <option value="BBB">BBB 治療師</option>
+                </select>
+            </div>
+
+            <!-- 期望預約時間 -->
+            <div>
+                <label for="time_slots" class="block text-sm font-medium text-gray-700">期望預約時間/時段</label>
+                <textarea id="time_slots" required rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 border p-2" placeholder="建議填寫至少三個時段，例如：&#10;1/5 下午 2:00&#10;1/6 上午 10:00&#10;1/8 晚上 7:00"></textarea>
+            </div>
+
+            <!-- 送出按鈕 -->
+            <button type="submit" id="submit-btn" class="w-full py-3 bg-green-600 text-white rounded-md hover:bg-green-700 transition font-bold shadow-md">
+                確認送出預約
             </button>
-        </div>
+            <p class="text-xs text-center text-gray-400">送出後請留意聊天室確認訊息</p>
+
+        </form>
     </div>
 
     <script>
         const LIFF_ID = '2008806287-jfDxgE50'; 
         const GAS_URL = 'https://script.google.com/macros/s/AKfycbwcNsPso4DX3T87JhPjgR32pw804dUF0CbwlpiAUBMr4l-HibOtCUYMHPs9UtaA4-khzw/exec';
+        
+        // 全域變數儲存使用者資料
+        let g_uid = "";
+        let g_displayName = "";
 
         window.onload = function() {
             initializeLiff();
@@ -63,61 +95,87 @@
                     return; 
                 }
 
-                // 取得使用者資料
                 const idToken = liff.getDecodedIDToken();
-                const uid = idToken.sub;
-                const displayName = idToken.name || "用戶";
+                g_uid = idToken.sub;
+                g_displayName = idToken.name || "用戶";
                 
-                // 顯示名字在畫面上
-                document.getElementById('user-name').textContent = displayName;
+                document.getElementById('user-name').textContent = g_displayName;
 
-                // 1. 靜默傳送資料給 GAS (紀錄時間、UID、名稱)
+                // 1. 靜默傳送開啟紀錄
                 fetch(GAS_URL, {
                     method: 'POST',
                     mode: 'no-cors',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         type: 'track_open',
-                        uid: uid,
-                        name: displayName
+                        uid: g_uid,
+                        name: g_displayName
                     })
                 });
 
-                // 2. 意圖宣告：發送 "預約治療師"
-                // 僅在手機/LINE App 內執行，避免電腦版報錯
+                // 2. 意圖宣告 (開啟時發送 "預約治療師")
                 if (liff.isInClient()) {
-                    await liff.sendMessages([{
-                        type: 'text',
-                        text: '預約治療師'
-                    }]);
+                    await liff.sendMessages([{ type: 'text', text: '預約治療師' }]);
                 }
 
-                // 顯示畫面
                 document.body.style.visibility = 'visible';
                 document.getElementById('loading').style.display = 'none';
 
             } catch (error) {
                 alert('初始化錯誤: ' + error);
-                document.body.style.visibility = 'visible'; // 出錯也要顯示，不然會白畫面
+                document.body.style.visibility = 'visible';
                 document.getElementById('loading').style.display = 'none';
             }
         }
 
-        async function sendTestReply() {
-            if (!liff.isInClient()) {
-                alert('此功能僅限 LINE App 內使用');
-                return;
-            }
+        // 表單送出處理
+        document.getElementById('bookingForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            // 鎖定按鈕避免重複送出
+            const btn = document.getElementById('submit-btn');
+            const originalText = btn.innerText;
+            btn.disabled = true;
+            btn.innerText = "資料傳送中...";
+            btn.classList.add("opacity-50", "cursor-not-allowed");
+
+            // 取得表單資料
+            const formData = {
+                type: 'submit_form', // 告訴 GAS 這是表單送出
+                uid: g_uid,
+                line_name: g_displayName,
+                form_name: document.getElementById('name').value,
+                form_phone: document.getElementById('phone').value,
+                form_therapist: document.getElementById('therapist').value,
+                form_time: document.getElementById('time_slots').value
+            };
+
             try {
-                await liff.sendMessages([{
-                    type: 'text',
-                    text: 'API回覆測試'
-                }]);
+                // 1. 傳送資料到 GAS (直接寫入 Sheet)
+                await fetch(GAS_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+
+                // 2. 在聊天室留底 (選擇性，讓使用者安心)
+                if (liff.isInClient()) {
+                    const msg = `#預約資料送出\n姓名：${formData.form_name}\n指定：${formData.form_therapist}`;
+                    await liff.sendMessages([{ type: 'text', text: msg }]);
+                }
+
+                alert('✅ 預約資料已送出！');
                 liff.closeWindow();
+
             } catch (error) {
-                alert('發送失敗: ' + error);
+                alert('傳送失敗，請稍後再試：' + error);
+                // 恢復按鈕
+                btn.disabled = false;
+                btn.innerText = originalText;
+                btn.classList.remove("opacity-50", "cursor-not-allowed");
             }
-        }
+        });
     </script>
 </body>
 </html>
