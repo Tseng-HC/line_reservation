@@ -1,4 +1,4 @@
-<!-- ver0.19 排程優化版 -->
+<!-- ver0.20 極速關閉版 (Keepalive) -->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -16,7 +16,7 @@
 <body class="bg-gray-50 p-6 relative">
 
     <!-- 版本號 -->
-    <div class="absolute top-2 right-2 text-xs text-gray-400 font-mono bg-gray-200 px-2 py-1 rounded">ver0.19</div>
+    <div class="absolute top-2 right-2 text-xs text-gray-400 font-mono bg-gray-200 px-2 py-1 rounded">ver0.20 (Fast)</div>
 
     <!-- Loading -->
     <div id="loading">
@@ -35,7 +35,7 @@
             <p class="mt-1" id="page-hint">請填寫下方資料，填寫進度將自動保存。</p>
         </div>
 
-        <!-- ================= 表單填寫區 (Form Section) ================= -->
+        <!-- ================= 表單填寫區 ================= -->
         <div id="form-section">
             <form id="bookingForm" class="space-y-4" onsubmit="return false;">
                 
@@ -80,7 +80,7 @@
             </form>
         </div>
 
-        <!-- ================= 預覽確認區 (Review Section) ================= -->
+        <!-- ================= 預覽確認區 ================= -->
         <div id="review-section" class="hidden space-y-4">
             <h2 class="text-lg font-bold text-gray-700 border-b pb-2">請確認您的預約內容</h2>
             
@@ -149,7 +149,7 @@
                 
                 document.getElementById('user-name').textContent = g_displayName;
 
-                // 1. 開啟紀錄
+                // 開啟紀錄 (背景執行)
                 fetch(GAS_URL, {
                     method: 'POST',
                     mode: 'no-cors',
@@ -161,12 +161,12 @@
                     })
                 });
 
-                // 2. 意圖宣告
+                // 意圖宣告
                 if (liff.isInClient()) {
                     await liff.sendMessages([{ type: 'text', text: '預約治療師' }]);
                 }
 
-                // 3. 啟動心跳 (20分鐘一次)
+                // 啟動心跳 (20分鐘一次)
                 startHeartbeat();
 
                 document.body.style.visibility = 'visible';
@@ -182,7 +182,6 @@
         // --- 心跳機制 ---
         function startHeartbeat() {
             if (heartbeatInterval) clearInterval(heartbeatInterval);
-            // 每 20 分鐘 (1200000ms) 發送一次
             heartbeatInterval = setInterval(() => {
                 fetch(GAS_URL, {
                     method: 'POST',
@@ -202,19 +201,36 @@
 
         // --- 核心功能函式 ---
 
-        function syncData(actionType = 'sync_data') {
+        // 【修改】加入 useKeepAlive 參數，支援射後不理
+        function syncData(actionType = 'sync_data', useKeepAlive = false) {
             const statusLabel = document.getElementById('sync-status');
             if (statusLabel) statusLabel.textContent = "資料同步中...";
 
             const formData = getFormData();
             formData.type = actionType;
 
-            return fetch(GAS_URL, {
+            const fetchOptions = {
                 method: 'POST',
                 mode: 'no-cors',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(formData)
-            }).then(() => {
+            };
+
+            // 如果是送出或取消，使用 keepalive，瀏覽器會在背景繼續傳輸
+            if (useKeepAlive) {
+                fetchOptions.keepalive = true;
+            }
+
+            const fetchPromise = fetch(GAS_URL, fetchOptions);
+
+            // 如果使用 KeepAlive 且不是一般同步，則不等待回應，直接回傳 Promise.resolve
+            // 這樣介面可以馬上反應，不卡頓
+            if (useKeepAlive && actionType !== 'sync_data') {
+                return Promise.resolve(formData);
+            }
+
+            // 一般同步仍需等待，為了顯示 "已保存"
+            return fetchPromise.then(() => {
                 if (actionType === 'sync_data' && statusLabel) {
                     statusLabel.textContent = "進度已自動保存";
                     setTimeout(() => statusLabel.textContent = "", 2000);
@@ -260,22 +276,25 @@
             loadingText.textContent = "正在取消預約...";
             loadingDiv.style.display = 'flex';
 
+            // 【修改】使用 keepalive 發送取消，不等待回應
             try {
-                await Promise.race([
-                    fetch(GAS_URL, {
-                        method: 'POST',
-                        mode: 'no-cors',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            type: 'cancel_form',
-                            uid: g_uid,
-                            name: g_displayName
-                        })
-                    }),
-                    new Promise(resolve => setTimeout(resolve, 3000))
-                ]);
+                fetch(GAS_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    keepalive: true, // 關鍵：背景傳輸
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'cancel_form',
+                        uid: g_uid,
+                        name: g_displayName
+                    })
+                });
+                
+                // 僅做 500ms 短暫延遲，讓使用者看到 Loading 畫面有個反應
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
             } catch (e) {
-                console.error("Cancel error", e);
+                console.error("Cancel trigger error", e);
             }
 
             liff.closeWindow();
@@ -289,11 +308,10 @@
             btn.innerText = "資料傳送中...";
 
             try {
-                const formData = await Promise.race([
-                    syncData('submit_form'),
-                    new Promise((_, reject) => setTimeout(() => reject(new Error("連線逾時，請檢查網路")), 10000))
-                ]);
+                // 【修改】開啟 keepalive，syncData 會立即回傳 formData 不等待 GAS
+                const formData = await syncData('submit_form', true);
 
+                // 只等待 LIFF 發送訊息 (這個很快)
                 if (liff.isInClient()) {
                     const msg = `#預約資料送出\n姓名：${formData.form_name}\n指定：${formData.form_therapist}\n時間：${formData.form_time}`;
                     await liff.sendMessages([{ type: 'text', text: msg }]);
