@@ -1,4 +1,4 @@
-<!-- ver0.26 Environment Alert -->
+<!-- ver0.28 Session Timeout (No Event Listeners) -->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -18,10 +18,10 @@
 </head>
 <body class="bg-gray-50 p-3 relative min-h-screen">
 
-    <!-- 版本號 (移至最右下角，僅顯示數字) -->
-    <div class="fixed bottom-1 right-1 text-[10px] text-gray-300 font-mono z-0 pointer-events-none">ver0.26</div>
+    <!-- 版本號 -->
+    <div class="fixed bottom-1 right-1 text-[10px] text-gray-300 font-mono z-0 pointer-events-none">ver0.28</div>
 
-    <!-- 訊息提示區 (取代 alert，提升體驗且相容預覽) -->
+    <!-- 訊息提示區 (Toast) -->
     <div id="msg-toast" class="fixed top-4 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded shadow-lg text-sm z-50 hidden transition-opacity duration-300">
         提示訊息
     </div>
@@ -34,7 +34,22 @@
         </div>
     </div>
 
-    <!-- 主要容器 (Tall View 優化版) -->
+    <!-- ================= 逾時遮罩 (修改文字) ================= -->
+    <div id="idle-overlay" class="hidden fixed inset-0 bg-gray-900 bg-opacity-95 z-[1000] flex flex-col justify-center items-center text-white text-center p-6">
+        <div class="mb-4 text-5xl">⚠️</div>
+        <h2 class="text-2xl font-bold mb-3">操作時間逾時</h2>
+        <p class="mb-8 text-gray-300 text-sm leading-relaxed">
+            為了確保資料安全，<br>
+            系統限制單次操作時間為 20 分鐘。<br>
+            連線已自動中斷。
+        </p>
+        <button onclick="location.reload()" class="w-full max-w-xs py-3 bg-green-600 rounded-lg font-bold hover:bg-green-700 transition shadow-lg border border-green-500">
+            重新整理頁面
+        </button>
+    </div>
+    <!-- ================= End 逾時遮罩 ================= -->
+
+    <!-- 主要容器 -->
     <div class="max-w-md mx-auto bg-white rounded-lg shadow-sm p-4 space-y-3 mt-1">
         <h1 class="text-xl font-bold text-center text-green-700 mb-2">預約治療師</h1>
         
@@ -133,6 +148,10 @@
         let g_displayName = "";
         let heartbeatInterval = null; 
 
+        // --- 逾時變數 ---
+        const SESSION_LIMIT = 20 * 60 * 1000; // 20分鐘 (毫秒)
+        let sessionTimer = null;
+
         window.onload = function() {
             initializeLiff();
         };
@@ -156,20 +175,19 @@
 
                 await liff.init({ liffId: LIFF_ID });
 
-                // 【新增】環境偵測警示
+                // 環境偵測警示
                 if (!liff.isInClient()) {
-                    alert("提醒：您目前使用電腦或外部瀏覽器，預約功能將受限。\n\n建議使用 LINE App 開啟預約，避免失敗。");
+                    // alert("提醒：您目前使用電腦或外部瀏覽器..."); 
+                    // 可依需求保留或移除 alert
                 }
                 
                 // 登入檢查與環境判斷
                 if (!liff.isLoggedIn()) {
                     if (!liff.isInClient()) {
-                        // 預覽模式 / PC 瀏覽器：使用假資料
                         console.log("預覽模式：使用模擬資料");
                         g_uid = "preview_user";
                         g_displayName = "預覽用戶";
                     } else {
-                        // LINE App 內：強制登入
                         liff.login();
                         return;
                     }
@@ -196,8 +214,11 @@
                     await liff.sendMessages([{ type: 'text', text: '預約治療師' }]);
                 }
 
-                // 3. 啟動心跳
+                // 3. 啟動心跳 (後端保活用)
                 startHeartbeat();
+
+                // 4. 【修改】啟動純時間限制邏輯 (不管是否有動作)
+                startSessionTimer();
 
                 document.getElementById('loading').style.display = 'none';
 
@@ -207,6 +228,22 @@
                 showToast('系統初始化異常 (預覽模式)', true);
             }
         }
+
+        // ================= 修改：純時間限制邏輯 (不偵測動作) =================
+        function startSessionTimer() {
+            // 直接啟動倒數，不加任何事件監聽
+            console.log("啟動 20 分鐘硬性倒數");
+            
+            if (sessionTimer) clearTimeout(sessionTimer);
+
+            sessionTimer = setTimeout(() => {
+                // 時間到：顯示遮罩、停止後端心跳
+                document.getElementById('idle-overlay').classList.remove('hidden');
+                stopHeartbeat(); 
+                console.log("頁面開啟超過 20 分鐘，鎖定畫面");
+            }, SESSION_LIMIT);
+        }
+        // ================= End 時間限制邏輯 =================
 
         function startHeartbeat() {
             if (heartbeatInterval) clearInterval(heartbeatInterval);
